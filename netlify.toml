@@ -38,4 +38,4 @@
     Permissions-Policy = "camera=(), microphone=(), geolocation=(self)"
 
 [environment]
-  VITE_API_URL = "https://ferrex-api.onrender.com"
+  VITE_API_URL = "https://ferrex-vdex.onrender.com"
