@@ -801,7 +801,7 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`G&A Casero API + Web en ${BASE_URL} (port ${PORT})`);
     console.log(`Frontend: ${FRONT_DIR} ${FRONT_OK ? 'OK' : '⚠ FALTA index.html — revisa Root Directory'}`);
     console.log(`Uploads: ${UPLOAD_DIR}`);
