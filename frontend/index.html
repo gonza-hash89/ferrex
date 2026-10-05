@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>FERREX | Tu ferretería de barrio al toque en tu celular</title>
+<meta name="description" content="Pide accesorios de ferretería, repuestos, fijaciones y herramientas pequeñas con delivery rápido (S/ 5.00) o recojo gratis en tu distrito. Conectamos vecinos con ferreterías locales en Perú.">
+<meta name="keywords" content="ferreteria, ferreteria cerca de mi, delivery ferreteria, accesorios ferreteros, pernos, teflon, gasfiteria, electricidad, Chosica, Lima, FERREX">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#1A252F">
+<link rel="canonical" href="https://ferrex.pe/">
+<!-- Open Graph (WhatsApp / Facebook) -->
+<meta property="og:title" content="FERREX - Tu ferretería de barrio al toque">
+<meta property="og:description" content="Consigue repuestos y accesorios pequeños en tu ferretería más cercana con delivery S/ 5.00 o recojo gratis.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ferrex.pe/">
+<meta property="og:image" content="https://ferrex.pe/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="es_PE">
+<meta property="og:site_name" content="FERREX">
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="FERREX">
+<meta name="twitter:description" content="Accesorios y repuestos ferreteros al toque en Perú.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FERREX">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/assets/logo-ferrex.svg">
+<link rel="apple-touch-icon" href="/assets/logo-ferrex.svg">
+<script>window.__VITE_API_URL__ = "https://ferrex-api.onrender.com";</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{plomo:'#2C3E50',plomoDark:'#1A252F',cinta:'#F39C12',cintaLight:'#F1C40F',etiqueta:'#C0392B',listo:'#27AE60',cemento:'#F8F9FA'}}}}</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:Inter,system-ui}.price-tag{background:#C0392B;color:#fff;font-weight:800;padding:.2rem .65rem;border-radius:.5rem;display:inline-block}
+.view{display:none}.view.active{display:block}.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
+@keyframes pulse-new{0%,100%{box-shadow:0 0 0 0 rgba(243,156,18,.7)}50%{box-shadow:0 0 0 10px rgba(243,156,18,0)}}
+.order-new{animation:pulse-new 1.2s ease infinite;border:2px solid #F39C12!important;background:#FEF6E0!important}
+input,select,button{min-height:44px}
+/* WCAG 2.1 AA: foco visible + skip link */
+:focus-visible{outline:3px solid #F39C12;outline-offset:2px;border-radius:.5rem}
+.skip{position:absolute;left:-9999px;top:0;background:#2C3E50;color:#fff;font-weight:800;padding:.75rem 1rem;z-index:100;border-radius:0 0 .75rem 0}
+.skip:focus{left:0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body class="bg-cemento">
+<a href="#vCli" class="skip">Saltar al catálogo</a>
+<header class="bg-plomo text-white sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+    <a href="/" class="flex items-center gap-2" aria-label="FERREX - Inicio">
+      <img src="/assets/logo-ferrex.svg" alt="FERREX" class="w-10 h-10" width="40" height="40">
+      <span class="font-black text-lg leading-none hidden sm:inline">FERREX</span>
+    </a>
+    <button onclick="openLoc()" id="locBtn" aria-label="Mi ubicación" class="flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-xl text-sm font-bold max-w-[240px]">
+      <span>📍</span><span id="locLbl" class="truncate">Selecciona tu zona</span><span class="text-white/50">▾</span>
+    </button>
+    <select id="storeSel" onchange="onStoreChange()" aria-label="Ferretería" class="text-gray-900 rounded-xl px-3 py-2 text-sm font-bold max-w-[240px]"></select>
+    <button onclick="openModal('storeModal')" class="bg-cintaLight text-plomo text-sm font-extrabold px-3 py-2 rounded-xl">+ Mi ferretería</button>
+    <div class="flex-1"></div>
+    <input id="q" oninput="loadProducts()" placeholder="Buscar: teflón, foco…" aria-label="Buscar" class="rounded-xl px-3 py-2 text-sm text-gray-900 w-56">
+    <div class="bg-white/10 rounded-xl p-1 text-xs font-bold flex"><button id="bCli" onclick="setMode('c')" class="px-3 py-1.5 rounded-lg bg-cinta text-plomo">Vecino</button><button id="bFer" onclick="setMode('f')" class="px-3 py-1.5 rounded-lg">Ferretería</button></div>
+    <button class="bg-cinta font-extrabold px-4 py-2 rounded-xl text-plomo" aria-label="Carrito">🛒 <span id="cartN">0</span></button>
+  </div>
+  <div id="apiStat" class="text-center text-[11px] py-1 bg-plomoDark text-white/70">Conectando a API…</div>
+</header>
+
+<!-- CLIENTE -->
+<div id="vCli" tabindex="-1" class="view active max-w-7xl mx-auto px-4 py-5 grid lg:grid-cols-[1fr_330px] gap-5 items-start">
+  <div>
+    <div id="cats" class="flex gap-2 overflow-x-auto no-scrollbar pb-2"></div>
+    <div id="grid" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-3"></div>
+  </div>
+  <aside class="bg-white rounded-2xl shadow p-5 lg:sticky lg:top-24">
+    <h3 class="font-extrabold">🧾 Tu pedido</h3>
+    <button onclick="openLoc()" class="w-full mt-1 text-left text-xs bg-cemento rounded-xl px-3 py-2">📍 <span id="zoneLbl">Sin zona — toca para elegir</span></button>
+    <div id="cartBox" class="text-sm mt-2 space-y-2"></div>
+    <div class="text-sm mt-3 border-t pt-2"><div class="flex justify-between"><span>Subtotal</span><b id="subT">S/ 0.00</b></div>
+    <div class="flex justify-between"><span>Envío a domicilio</span><b id="shT">S/ 5.00</b></div>
+    <div class="flex justify-between text-lg"><b>Total a pagar</b><b id="toT" class="text-etiqueta">S/ 0.00</b></div></div>
+    <div class="flex gap-2 mt-2 text-sm">
+      <label class="flex-1 bg-cemento rounded-xl p-2 border-2 border-cinta cursor-pointer"><input type="radio" name="del" value="delivery" checked onchange="renderCart()"> 🛵 Delivery</label>
+      <label class="flex-1 bg-cemento rounded-xl p-2 cursor-pointer"><input type="radio" name="del" value="recojo" onchange="renderCart()"> 🏃 Recojo</label>
+    </div>
+    <label class="block text-xs font-bold mt-2">Dirección de entrega
+      <input id="addr" value="Jr. Lima 240, Chosica" placeholder="Jr. Lima 240, Chosica" class="w-full border rounded-xl px-3 py-2 text-sm mt-1 font-normal">
+    </label>
+    <label class="block text-xs font-bold mt-2">¿Quién recoge? <span class="font-normal text-gray-400">(solo recojo)</span>
+      <input id="pickupName" placeholder="Ej. Juan Pérez" class="w-full border rounded-xl px-3 py-2 text-sm mt-1 font-normal">
+    </label>
+    <div class="grid grid-cols-3 gap-2 mt-2 text-xs font-bold">
+      <button onclick="setPay('Efectivo')" class="pay bg-plomo text-white rounded-xl py-2">Efectivo</button>
+      <button onclick="setPay('Yape')" class="pay bg-gray-100 rounded-xl py-2">Yape</button>
+      <button onclick="setPay('Plin')" class="pay bg-gray-100 rounded-xl py-2">Plin</button>
+    </div>
+    <button onclick="sendOrder()" id="sendBtn" class="w-full bg-cinta text-plomo font-black py-3 rounded-xl mt-3">Confirmar pedido por WhatsApp →</button>
+    <label class="flex items-start gap-2 mt-2 text-xs cursor-pointer"><input id="consent" type="checkbox" class="w-5 h-5 mt-0.5 accent-[#27AE60]"> <span>Acepto las <button type="button" onclick="openModal('privModal')" class="underline font-bold">Políticas de Privacidad</button> y <button type="button" onclick="openModal('termModal')" class="underline font-bold">Términos de Compra</button>*</span></label>
+    <!-- Confirmación + WhatsApp (capa 1) -->
+    <div id="orderOk" class="hidden mt-3 bg-listo/10 border-2 border-listo rounded-2xl p-3 text-sm">
+      <p class="font-black text-listo">✅ <span id="okCode"></span> registrado (Pendiente)</p>
+      <p id="okTxt" class="text-xs text-gray-600 mt-1"></p>
+      <a id="waCta" target="_blank" rel="noopener" class="block text-center mt-2 bg-listo text-plomoDark font-extrabold py-2.5 rounded-xl">Enviar por WhatsApp 💬</a>
+      <button onclick="copyWa()" class="w-full mt-2 text-xs font-bold text-gray-500">Copiar mensaje</button>
+    </div>
+    <p class="text-[11px] text-gray-400 text-center mt-2">Se abre WhatsApp con tu pedido listo para enviar 📲</p>
+  </aside>
+</div>
+
+<!-- FERRETERIA -->
+<div id="vFer" class="view max-w-7xl mx-auto px-4 py-5">
+  <div id="sesBar" class="hidden mb-3 bg-plomo text-white rounded-2xl p-3 flex items-center gap-2 text-sm">
+    <span>🏪 <b id="sesName"></b> · <span id="sesHora" class="text-white/70"></span></span>
+    <span class="flex-1"></span>
+    <button onclick="logout()" class="text-xs font-bold bg-white/10 px-3 py-1.5 rounded-xl">Salir</button>
+  </div>
+  <div id="noSes" class="mb-3 bg-cinta/20 border-2 border-cinta rounded-2xl p-3 text-sm">
+    🔒 <b>Gestiona tu ferretería:</b> <button onclick="openModal('loginModal')" class="font-black underline">inicia sesión</button> para publicar, cambiar stock y tu horario.
+  </div>
+  <div class="flex gap-2 flex-wrap items-center">
+    <button onclick="ftab('ped')" class="bg-plomo text-white font-bold px-4 py-2 rounded-xl text-sm">🧾 Pedidos</button>
+    <button onclick="ftab('stk')" class="bg-white font-bold px-4 py-2 rounded-xl text-sm shadow">📦 Productos / Stock</button>
+    <button onclick="needAuth(()=>openModal('prodModal'))" class="bg-listo text-plomoDark font-bold px-4 py-2 rounded-xl text-sm">➕ Agregar producto con foto</button>
+    <span id="ssePill" class="text-[11px] font-bold px-3 py-1.5 rounded-full bg-gray-200">● conectando…</span>
+    <button id="sndBtn" onclick="toggleSound()" class="text-[11px] font-bold px-3 py-1.5 rounded-full bg-cinta">🔔 Sonido ON</button>
+  </div>
+  <!-- Mi horario -->
+  <div class="bg-white rounded-2xl shadow p-4 mt-3 max-w-2xl">
+    <h3 class="font-extrabold text-sm">🕐 Mi horario de atención <span id="myState" class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200"></span></h3>
+    <div class="grid grid-cols-2 gap-2 mt-2 max-w-xs">
+      <label class="text-xs">Apertura<input id="hApe" type="time" class="w-full border rounded-xl px-2 py-2 text-sm mt-1"></label>
+      <label class="text-xs">Cierre<input id="hCie" type="time" class="w-full border rounded-xl px-2 py-2 text-sm mt-1"></label>
+    </div>
+    <div class="flex gap-1 mt-2 flex-wrap" id="myDias"></div>
+    <label class="flex items-center gap-2 mt-2 text-sm font-bold"><input id="hOpen" type="checkbox" class="w-5 h-5 accent-[#27AE60]"> Local abierto (interruptor general)</label>
+    <button onclick="needAuth(saveSchedule)" class="mt-2 bg-plomo text-white font-bold px-4 py-2 rounded-xl text-sm">Guardar horario ✅</button>
+    <p id="myHoraTxt" class="text-xs text-gray-500 mt-1"></p>
+  </div>
+  <p class="text-xs text-gray-500 mt-2">Los pedidos <b>Pendientes</b> suenan y parpadean en amarillo. Flujo: Pendiente → Aceptado → En Camino / Listo para recojo → Completado.</p>
+  <div id="fPed" class="grid md:grid-cols-2 gap-3 mt-3"></div>
+  <div id="fStk" class="hidden bg-white rounded-2xl shadow divide-y mt-4"></div>
+</div>
+
+<!-- MODAL UBICACIÓN HÍBRIDA -->
+<div id="locModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/60" onclick="closeModal('locModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-white rounded-2xl p-5 w-full max-w-md space-y-3">
+<h3 class="font-black text-lg">📍 ¿Dónde estás?</h3>
+<p class="text-xs text-gray-500">Te mostramos las ferreterías más cercanas. Sin GPS también funciona.</p>
+<button onclick="useGPS()" id="gpsBtn" class="w-full bg-plomo text-white font-extrabold py-3 rounded-xl">🎯 Usar mi ubicación actual (GPS)</button>
+<div class="text-center text-xs text-gray-400 font-bold">— o elige tu distrito —</div>
+<label class="block text-xs font-bold">Distrito
+  <select id="locDistrito" class="w-full border rounded-xl px-3 py-2 text-sm mt-1 font-normal">
+    <option value="">Seleccionar…</option>
+    <option>Chosica</option><option>Ate</option><option>Santa Anita</option>
+    <option>San Juan de Lurigancho</option><option>Chaclacayo</option>
+    <option>Santa Clara</option><option>Ricardo Palma</option><option>Lurigancho</option>
+  </select>
+</label>
+<label class="block text-xs font-bold">Dirección / referencia <span class="font-normal text-gray-400">(opcional)</span>
+  <input id="locRef" placeholder="Ej. Jr. Lima 240, frente al mercado" class="w-full border rounded-xl px-3 py-2 text-sm mt-1 font-normal">
+</label>
+<button onclick="saveManualLoc()" class="w-full bg-cinta font-black py-2.5 rounded-xl">Guardar mi zona ✅</button>
+<button onclick="clearLoc()" class="w-full text-xs font-bold text-gray-400">Ver todas sin filtrar</button>
+</div></div></div>
+
+<!-- MODAL LOGIN FERRETERÍA -->
+<div id="loginModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/60" onclick="closeModal('loginModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="loginForm" class="bg-white rounded-2xl p-5 w-full max-w-sm space-y-2" onsubmit="login(event)">
+<h3 class="font-black text-lg">🔐 Entrar como ferretería</h3>
+<input name="identifier" required inputmode="numeric" placeholder="Celular registrado (9XX XXX XXX)" class="w-full border rounded-xl px-3 py-2 text-sm">
+<input name="password" required type="password" placeholder="Contraseña" class="w-full border rounded-xl px-3 py-2 text-sm">
+<button class="w-full bg-plomo text-white font-black py-2.5 rounded-xl">Entrar →</button>
+<p class="text-xs text-gray-400 text-center">¿Sin cuenta? <button type="button" onclick="closeModal('loginModal');openModal('storeModal')" class="font-bold text-plomo">Regístrala aquí</button></p>
+</form></div></div>
+
+<!-- MODAL TIENDA -->
+<div id="storeModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/60" onclick="closeModal('storeModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="storeForm" class="bg-white rounded-2xl p-5 w-full max-w-md space-y-2" onsubmit="saveStore(event)">
+<h3 class="font-black text-lg">🏪 Registrar mi ferretería</h3>
+<input name="nombre" required minlength="3" maxlength="80" placeholder="Nombre: Ferretería Los Alisos" class="w-full border rounded-xl px-3 py-2 text-sm">
+<input name="distrito" required maxlength="60" placeholder="Distrito: Chosica" class="w-full border rounded-xl px-3 py-2 text-sm">
+<input name="direccion" maxlength="160" placeholder="Dirección del local" class="w-full border rounded-xl px-3 py-2 text-sm">
+<div class="grid grid-cols-2 gap-2">
+  <input name="telefono" inputmode="numeric" maxlength="9" placeholder="Celular 9XX XXX XXX" class="border rounded-xl px-3 py-2 text-sm">
+  <input name="whatsapp" inputmode="numeric" maxlength="11" placeholder="WhatsApp 519…" class="border rounded-xl px-3 py-2 text-sm">
+</div>
+<label class="block text-xs font-bold">Contraseña de la tienda* (mín 6 caracteres, para iniciar sesión)
+  <input name="password" type="password" required minlength="6" placeholder="••••••" class="w-full border rounded-xl px-3 py-2 text-sm mt-1">
+</label>
+<div class="bg-cemento rounded-xl p-3">
+  <p class="text-xs font-bold">🕐 Horario de atención</p>
+  <div class="grid grid-cols-2 gap-2 mt-1">
+    <label class="text-xs">Apertura<input name="apertura" type="time" value="08:00" class="w-full border rounded-xl px-2 py-2 text-sm mt-1"></label>
+    <label class="text-xs">Cierre<input name="cierre" type="time" value="20:00" class="w-full border rounded-xl px-2 py-2 text-sm mt-1"></label>
+  </div>
+  <div class="flex gap-1 mt-2 flex-wrap" id="regDias">
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="1" checked> Lun</label>
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="2" checked> Mar</label>
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="3" checked> Mié</label>
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="4" checked> Jue</label>
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="5" checked> Vie</label>
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="6" checked> Sáb</label>
+    <label class="text-[11px] bg-white rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="0"> Dom</label>
+  </div>
+</div>
+<label class="block text-xs font-bold">Logo / foto del local (JPG/PNG/WEBP, máx 5MB)<input type="file" name="logo" accept="image/jpeg,image/png,image/webp" class="block mt-1 text-xs"></label>
+<img id="logoPrev" alt="Vista previa del logo" class="hidden w-full h-32 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">
+<button class="w-full bg-cinta font-black py-2.5 rounded-xl">Guardar ferretería ✅</button>
+</form></div></div>
+
+<!-- MODAL PRODUCTO -->
+<div id="prodModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/60" onclick="closeModal('prodModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="prodForm" class="bg-white rounded-2xl p-5 w-full max-w-md space-y-2" onsubmit="saveProduct(event)">
+<h3 class="font-black text-lg">📦 Subir producto con foto</h3>
+<label class="block text-xs font-bold">Foto del producto* (JPG/PNG/WEBP, máx 5MB)<input type="file" name="foto" accept="image/jpeg,image/png,image/webp" required class="block mt-1 text-xs"></label>
+<img id="fotoPrev" alt="Vista previa del producto" class="hidden w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">
+<input name="nombre" required maxlength="100" placeholder="Nombre: Cinta teflón Truper" class="w-full border rounded-xl px-3 py-2 text-sm">
+<div class="grid grid-cols-2 gap-2"><input name="precio" type="number" step="0.10" min="0.1" required placeholder="Precio S/" class="border rounded-xl px-3 py-2 text-sm">
+<select name="categoria" class="border rounded-xl px-3 py-2 text-sm"><option>Electricidad</option><option>Gasfitería</option><option>Fijaciones</option><option>Herramientas</option><option>Pinturas</option><option>Candados</option></select></div>
+<button class="w-full bg-listo text-plomoDark font-black py-2.5 rounded-xl">Publicar ✅</button>
+</form></div></div>
+
+<!-- PIE DE PÁGINA -->
+<footer class="bg-plomoDark text-white mt-8">
+  <div class="max-w-7xl mx-auto px-4 py-8 grid gap-6 md:grid-cols-3 text-sm">
+    <div>
+      <p class="font-black text-base">FERREX</p>
+      <p class="text-white/70 text-xs mt-1">Tu ferretería de barrio, al toque en tu celular.<br>
+      Nombre comercial: FERREX · RUC: en proceso de formalización<br>
+      Contacto: +51 987 654 321 · hola@ferrex.pe</p>
+    </div>
+    <nav aria-label="Legal" class="text-xs space-y-1">
+      <p class="font-bold text-white/90">Legal y ayuda</p>
+      <p><button onclick="openModal('privModal')" class="underline">Política de Privacidad</button></p>
+      <p><button onclick="openModal('termModal')" class="underline">Términos y Condiciones</button></p>
+      <p><button onclick="openModal('devModal')" class="underline">Devoluciones y Cambios</button></p>
+      <p><button onclick="openModal('libroModal')" class="underline font-bold text-cintaLight">📕 Libro de Reclamaciones</button></p>
+    </nav>
+    <div class="text-xs text-white/70">
+      <p class="font-bold text-white/90">Compra protegida</p>
+      <p class="mt-1">Pagás al recibir (Efectivo / Yape / Plin). Precios en soles, incluyen IGV donde aplica. Tiempos de entrega estimados, no garantizados.</p>
+    </div>
+  </div>
+  <div class="border-t border-white/10 text-center text-[11px] text-white/50 py-3">© <span id="year">2026</span> FERREX · Hecho en Perú 🇵🇪 · Íconos y gráficos propios / emoji open-source</div>
+</footer>
+
+<!-- MODAL PRIVACIDAD -->
+<div id="privModal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Política de Privacidad"><div class="absolute inset-0 bg-black/60" onclick="closeModal('privModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-white rounded-2xl p-5 w-full max-w-lg space-y-2 text-sm max-h-[85vh] overflow-auto">
+<h3 class="font-black text-lg">🔒 Política de Privacidad (Ley N.° 29733)</h3>
+<p><b>Qué recogemos:</b> nombre, celular, distrito/dirección de entrega y detalle de tu pedido. La ferretería puede pedir tu ubicación GPS solo si aceptás; si no, usás tu distrito manualmente.</p>
+<p><b>Para qué:</b> uso exclusivo de procesar tu pedido (preparación, delivery o recojo y contacto por WhatsApp). No vendemos ni cedemos tus datos.</p>
+<p><b>Dónde se guardan:</b> en nuestros servidores (Render) y en tu navegador (distrito, carrito y sesión de ferretería). Las fotos de productos son públicas del catálogo.</p>
+<p><b>Tus derechos:</b> acceso, rectificación, cancelación y oposición escribiendo a hola@ferrex.pe con tu celular registrado. Respondemos en máximo 10 días hábiles.</p>
+<button onclick="closeModal('privModal')" class="w-full bg-plomo text-white font-bold py-2.5 rounded-xl">Entendido</button>
+</div></div></div>
+
+<!-- MODAL TÉRMINOS -->
+<div id="termModal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Términos y Condiciones"><div class="absolute inset-0 bg-black/60" onclick="closeModal('termModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-white rounded-2xl p-5 w-full max-w-lg space-y-2 text-sm max-h-[85vh] overflow-auto">
+<h3 class="font-black text-lg">📄 Términos y Condiciones de Compra</h3>
+<p><b>1. Qué es FERREX:</b> vitrina digital que conecta vecinos con ferreterías aliadas independientes. Cada ferretería prepara, cobra y entrega su pedido.</p>
+<p><b>2. Precios y pago:</b> precios en soles publicados por cada tienda. Pagás al recibir o recoger: Efectivo, Yape o Plin. Sin pagos adelantados por la web.</p>
+<p><b>3. Delivery y recojo:</b> delivery S/ 5.00 (tarifa fija); tiempos de 25–35 min son estimados según distancia y cola. El recojo gratis (Click & Collect) se retira en el local indicado.</p>
+<p><b>4. Stock:</b> el catálogo refleja el stock declarado por la tienda; si algo falta, la ferretería te avisa por WhatsApp antes de salir.</p>
+<p><b>5. Responsabilidad:</b> cada ferretería aliada responde por sus productos, precios y entregas. Reclamos: usá el Libro de Reclamaciones del pie de página.</p>
+<button onclick="closeModal('termModal')" class="w-full bg-plomo text-white font-bold py-2.5 rounded-xl">Aceptar</button>
+</div></div></div>
+
+<!-- MODAL DEVOLUCIONES -->
+<div id="devModal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Devoluciones y Cambios"><div class="absolute inset-0 bg-black/60" onclick="closeModal('devModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-white rounded-2xl p-5 w-full max-w-lg space-y-2 text-sm max-h-[85vh] overflow-auto">
+<h3 class="font-black text-lg">🔄 Devoluciones y Cambios</h3>
+<p><b>Producto defectuoso o incorrecto:</b> tenés 48 horas desde la entrega para pedir cambio o devolución del dinero, presentando el producto y tu código de pedido (#FX-...).</p>
+<p><b>Cómo:</b> escribí por WhatsApp a la ferretería o registrá tu caso en el Libro de Reclamaciones. La tienda coordina el recojo del producto.</p>
+<p><b>No aplica:</b> productos cortados, abiertos o usados (cables a medida, pintura preparada), salvo falla de fábrica.</p>
+<button onclick="closeModal('devModal')" class="w-full bg-plomo text-white font-bold py-2.5 rounded-xl">Entendido</button>
+</div></div></div>
+
+<!-- MODAL LIBRO DE RECLAMACIONES -->
+<div id="libroModal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Libro de Reclamaciones"><div class="absolute inset-0 bg-black/60" onclick="closeModal('libroModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form class="bg-white rounded-2xl p-5 w-full max-w-md space-y-2 text-sm" onsubmit="sendReclamo(event)">
+<h3 class="font-black text-lg">📕 Libro de Reclamaciones</h3>
+<p class="text-xs text-gray-500">Conforme al Código de Protección al Consumidor (Indecopi). Tu reclamo queda registrado con código y se deriva a la ferretería.</p>
+<input id="recNom" required placeholder="Nombre completo" class="w-full border rounded-xl px-3 py-2 text-sm">
+<input id="recTel" required inputmode="numeric" maxlength="9" placeholder="Celular 9XX XXX XXX" class="w-full border rounded-xl px-3 py-2 text-sm">
+<div class="grid grid-cols-2 gap-2">
+<input id="recPed" placeholder="Pedido #FX-… (opcional)" class="border rounded-xl px-3 py-2 text-sm">
+<select id="recTipo" class="border rounded-xl px-3 py-2 text-sm"><option>Reclamo</option><option>Queja</option></select>
+</div>
+<textarea id="recMsg" required maxlength="500" placeholder="Contanos qué pasó…" class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+<button class="w-full bg-cinta text-plomo font-black py-2.5 rounded-xl">Registrar reclamo ✅</button>
+<p id="recOk" class="hidden text-xs font-bold text-listo"></p>
+</form></div></div>
+
+<!-- BANNER COOKIES -->
+<div id="cookieBar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-plomoDark text-white text-xs">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+    <p class="flex-1 min-w-[220px]">🍪 Usamos cookies y almacenamiento local para guardar tu distrito seleccionado y mantener tu carrito de compras.</p>
+    <button onclick="acceptCookies()" class="bg-cinta text-plomo font-extrabold px-5 py-2 rounded-xl text-sm">Aceptar</button>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-plomo text-white text-sm font-bold px-5 py-2 rounded-full z-[60]"></div>
+<script src="/app.js"></script>
+<script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{})); }</script>
+</body>
+</html>

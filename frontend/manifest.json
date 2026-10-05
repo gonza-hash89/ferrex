@@ -1,0 +1,15 @@
+{
+  "name": "FERREX",
+  "short_name": "FERREX",
+  "description": "Tu ferretería de barrio, al toque en tu celular.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "es-PE",
+  "background_color": "#F8F9FA",
+  "theme_color": "#1A252F",
+  "icons": [
+    { "src": "/assets/logo-ferrex.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

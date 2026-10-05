@@ -1,0 +1,49 @@
+# G&A Casero — App funcional
+
+Estructura sólida: cualquier ferretería puede registrarse y subir sus productos con fotos reales.
+
+```
+ga-casero-app/
+  backend/
+    server.js       → API Express + subida de imágenes (multer)
+    db.json         → base de datos (se crea sola)
+    uploads/        → fotos de productos y logos (JPG/PNG/WEBP, máx 5MB)
+    package.json
+  frontend/
+    index.html      → web laptop + móvil conectada a la API
+    app.js          → fetch a /api, carrito, pedidos
+```
+
+## Cómo encenderlo (2 pasos)
+
+1. Abrir terminal en `backend`:
+```
+cd "OneDrive\Programas\Trabajos de programacion\ga-casero-app\backend"
+npm install
+npm start
+```
+2. Abrir en el navegador: http://localhost:3001
+
+El backend sirve la web y la API en el mismo puerto.
+
+## Qué ya funciona (probado ✅)
+
+- `GET /api/health` → ok
+- `GET /api/stores` → lista ferreterías
+- `POST /api/stores` (multipart `logo`) → registra ferretería con foto
+- `GET /api/products?store_id=1` → catálogo por tienda, con `foto_url`
+- `POST /api/products` (multipart `foto`) → sube foto, devuelve 201 + `/uploads/xxx.jpg`
+- `GET /uploads/xxx.jpg` → sirve la imagen (image/jpeg)
+- `PATCH /api/products/:id` → Hay / Sin stock
+- `DELETE /api/products/:id` → borra producto + su foto
+- `POST /api/orders` + `GET /api/orders?store_id=` + `PATCH /api/orders/:id`
+
+Prueba automática: `node test-smoke.js` → HEALTH, STORES 2, PRODUCTS 4, UPLOAD 201, IMG 200.
+
+## Flujo para una ferretería nueva
+
+1. Botón **+ Mi ferretería** → nombre, distrito, dirección, celular + logo → Guardar.
+2. Elegir su tienda en el selector superior.
+3. Modo **Ferretería** → **Agregar producto con foto** → foto + nombre + precio + categoría → Publicar.
+4. El vecino lo ve al instante en el catálogo. Con **Hay/Sin stock** lo oculta en 1 toque.
+5. Pedidos entrantes → **Aceptar/Rechazar**.

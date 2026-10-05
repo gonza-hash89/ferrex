@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: ferrex-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ACCESS_TTL
+        value: 15m
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BASE_URL
+        fromService:
+          type: web
+          name: ferrex-api
+          property: host
+      - key: CORS_ORIGIN
+        sync: false

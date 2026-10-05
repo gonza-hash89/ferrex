@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>G&A Casero — La ferretería de tu barrio, al toque en tu celular</title>
+<meta name="description" content="Prototipo Mobile-First B2C: accesorios ferreteros de urgencia con delivery exprés y recojo gratis.">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        plomo: '#2C3E50',
+        plomoDark: '#1A252F',
+        cinta: '#F39C12',
+        cintaLight: '#F1C40F',
+        etiqueta: '#E74C3C',
+        listo: '#27AE60',
+        cemento: '#F8F9FA'
+      },
+      fontFamily: { sans: ['Inter','Roboto','system-ui','sans-serif'] },
+      boxShadow: { card: '0 4px 14px rgba(44,62,80,.10)', pop: '0 -6px 20px rgba(0,0,0,.12)' }
+    }
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Inter',Roboto,system-ui,sans-serif}
+  .price-tag{position:relative;background:#E74C3C;color:#fff;font-weight:800;padding:.25rem .6rem;border-radius:.5rem;display:inline-block}
+  .price-tag::after{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);border:6px solid transparent;border-right-color:#E74C3C;border-left:0}
+  .no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
+  .screen{display:none}.screen.active{display:block;animation:fade .22s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .tab-cat.active{background:#2C3E50;color:#fff}
+  input,select,button{min-height:48px}
+</style>
+</head>
+<body class="bg-gray-200 min-h-screen sm:py-6">
+
+<!-- CONTENEDOR TIPO APP -->
+<div class="mx-auto max-w-[430px] bg-cemento min-h-screen sm:min-h-[92vh] sm:rounded-[2rem] sm:shadow-2xl overflow-hidden relative flex flex-col border border-gray-300">
+
+  <!-- SWITCH MODO -->
+  <div class="bg-plomoDark text-white px-3 pt-3 pb-2 sticky top-0 z-40">
+    <div class="grid grid-cols-2 bg-white/10 rounded-xl p-1 text-sm font-bold">
+      <button id="modeClienteBtn" onclick="setMode('cliente')" class="rounded-lg py-2 bg-cinta text-plomo">🏠 Vecino</button>
+      <button id="modeFerreBtn" onclick="setMode('ferre')" class="rounded-lg py-2 text-white/80">🏪 Ferretería</button>
+    </div>
+    <p class="text-center text-[11px] text-white/60 mt-1">Prototipo interactivo · máximo 3 toques para pedir</p>
+  </div>
+
+  <!-- ============ VISTA CLIENTE ============ -->
+  <div id="viewCliente" class="flex-1 flex flex-col">
+
+    <!-- HEADER -->
+    <header class="bg-plomo text-white px-4 pt-3 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-extrabold leading-none">🔩 G&A <span class="text-cintaLight">Casero</span></h1>
+          <p class="text-[11px] text-white/70">La ferretería de tu barrio, al toque en tu celular.</p>
+        </div>
+        <button onclick="toast('Ubicación actualizada: Chosica 📍')" class="bg-white/10 rounded-xl px-3 py-1 text-xs font-bold">📍 Chosica ▾</button>
+      </div>
+      <div class="mt-3 relative">
+        <input id="searchInput" oninput="renderCatalog()" placeholder="¿Qué necesitas hoy? Ej. teflón, foco…" class="w-full rounded-2xl pl-11 pr-4 text-[15px] text-gray-900 shadow-card outline-none focus:ring-2 focus:ring-cinta">
+        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-lg">🔎</span>
+      </div>
+    </header>
+
+    <main class="flex-1 pb-36">
+
+      <!-- PANTALLA 1: INICIO -->
+      <section id="scr-inicio" class="screen active">
+        <div class="px-4 pt-3">
+          <h2 class="font-extrabold text-plomo">Busca por tipo</h2>
+          <div class="grid grid-cols-3 gap-2 mt-2">
+            <button onclick="goCat('Electricidad')" class="bg-white rounded-2xl shadow-card p-3 text-center"><div class="text-2xl">💡</div><div class="text-xs font-bold mt-1">Electricidad</div></button>
+            <button onclick="goCat('Gasfitería')" class="bg-white rounded-2xl shadow-card p-3 text-center"><div class="text-2xl">🚿</div><div class="text-xs font-bold mt-1">Gasfitería</div></button>
+            <button onclick="goCat('Pinturas')" class="bg-white rounded-2xl shadow-card p-3 text-center"><div class="text-2xl">🎨</div><div class="text-xs font-bold mt-1">Pinturas</div></button>
+            <button onclick="goCat('Herramientas')" class="bg-white rounded-2xl shadow-card p-3 text-center"><div class="text-2xl">🔧</div><div class="text-xs font-bold mt-1">Herramientas</div></button>
+            <button onclick="goCat('Candados')" class="bg-white rounded-2xl shadow-card p-3 text-center"><div class="text-2xl">🔒</div><div class="text-xs font-bold mt-1">Candados</div></button>
+            <button onclick="goCat('Fijaciones')" class="bg-white rounded-2xl shadow-card p-3 text-center"><div class="text-2xl">🔩</div><div class="text-xs font-bold mt-1">Tornillos</div></button>
+          </div>
+        </div>
+
+        <div class="px-4 mt-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-extrabold text-plomo">Ferreterías de tu zona</h2>
+            <span class="text-xs bg-listo/10 text-listo font-bold px-2 py-1 rounded-full">● 2 abiertas</span>
+          </div>
+          <div class="space-y-2 mt-2" id="storeList">
+            <button onclick="selectStore('Ferretería Los Andes')" class="w-full text-left bg-white rounded-2xl shadow-card p-3 flex items-center gap-3 border-2 border-cinta">
+              <div class="w-11 h-11 rounded-xl bg-plomo text-white grid place-items-center text-xl font-extrabold">LA</div>
+              <div class="flex-1"><p class="font-bold text-sm">Ferretería Los Andes</p><p class="text-xs text-gray-500">a 6 min de ti · Jr. Lima 320</p></div>
+              <span class="text-[11px] font-extrabold bg-listo text-white px-2 py-1 rounded-full">Abierto</span>
+            </button>
+            <button onclick="selectStore('Ferretería San José')" class="w-full text-left bg-white rounded-2xl shadow-card p-3 flex items-center gap-3">
+              <div class="w-11 h-11 rounded-xl bg-plomo/10 grid place-items-center text-xl">🏪</div>
+              <div class="flex-1"><p class="font-bold text-sm">Ferretería San José</p><p class="text-xs text-gray-500">a 9 min de ti · Av. 28 de Julio 140</p></div>
+              <span class="text-[11px] font-extrabold bg-listo text-white px-2 py-1 rounded-full">Abierto</span>
+            </button>
+            <div class="bg-white rounded-2xl shadow-card p-3 flex items-center gap-3 opacity-60">
+              <div class="w-11 h-11 rounded-xl bg-gray-200 grid place-items-center text-xl">🔒</div>
+              <div class="flex-1"><p class="font-bold text-sm">El Tornillo Feliz</p><p class="text-xs text-gray-500">a 14 min · abre 8:00 am</p></div>
+              <span class="text-[11px] font-extrabold bg-gray-400 text-white px-2 py-1 rounded-full">Cerrado</span>
+            </div>
+          </div>
+          <div class="mt-3 bg-cinta/15 border border-cinta rounded-2xl p-3 text-xs">
+            <b>💡 Click & Collect:</b> pide ahora y recoge gratis sin cola con tu código QR. Ahorra S/ 3.00 de delivery.
+            <button onclick="show('scr-catalogo')" class="block mt-2 w-full bg-plomo text-white font-bold rounded-xl py-2">Ver catálogo de <span id="storeNameLbl">Los Andes</span> →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANTALLA 2: CATALOGO -->
+      <section id="scr-catalogo" class="screen">
+        <div class="px-4 pt-3 sticky top-0 bg-cemento/95 backdrop-blur z-10 pb-2">
+          <p class="text-xs text-gray-500">‹ <span id="storeNameLbl2">Ferretería Los Andes</span> · Abierto · a 6 min</p>
+          <h2 class="font-extrabold text-plomo text-lg">Catálogo exprés</h2>
+          <div id="catTabs" class="flex gap-2 overflow-x-auto no-scrollbar mt-2 pb-1"></div>
+        </div>
+        <div id="productGrid" class="px-4 grid grid-cols-2 gap-3 mt-1"></div>
+        <p class="text-center text-[11px] text-gray-400 mt-4 px-8">Fotos livianas optimizadas · carga rápida con pocos datos 📶</p>
+      </section>
+
+      <!-- PANTALLA 3: CARRITO -->
+      <section id="scr-carrito" class="screen">
+        <div class="px-4 pt-3">
+          <h2 class="font-extrabold text-plomo text-lg">‹ Tu pedido</h2>
+          <div id="cartList" class="space-y-2 mt-2"></div>
+          <div class="bg-white rounded-2xl shadow-card p-3 mt-3 text-sm">
+            <div class="flex justify-between"><span>Productos</span><b id="subTotalLbl">S/ 0.00</b></div>
+            <div class="flex justify-between"><span>Delivery</span><b id="shipLbl">S/ 3.00</b></div>
+            <div class="flex justify-between text-base mt-1 pt-2 border-t"><span class="font-bold">Total</span><b id="totalLbl" class="text-etiqueta">S/ 0.00</b></div>
+          </div>
+
+          <h3 class="font-extrabold text-plomo mt-4">¿Cómo lo quieres?</h3>
+          <div class="grid gap-2 mt-2">
+            <label class="bg-white rounded-2xl p-3 shadow-card flex gap-3 items-center border-2 border-cinta cursor-pointer">
+              <input type="radio" name="delivery" value="delivery" checked onchange="renderCart()" class="w-5 h-5 accent-[#F39C12]">
+              <div><p class="font-bold text-sm">🛵 Delivery Exprés — S/ 3.00</p><p class="text-xs text-gray-500">Llega en 25-35 min · gratis desde S/ 45</p></div>
+            </label>
+            <label class="bg-white rounded-2xl p-3 shadow-card flex gap-3 items-center border-2 border-transparent cursor-pointer">
+              <input type="radio" name="delivery" value="recojo" onchange="renderCart()" class="w-5 h-5 accent-[#F39C12]">
+              <div><p class="font-bold text-sm">🏃 Recojo Gratis — Click & Collect</p><p class="text-xs text-gray-500">Listo en ~30 min · <span id="pickupStoreLbl">Los Andes</span> · sin cola</p></div>
+            </label>
+          </div>
+
+          <div class="mt-3">
+            <label class="text-xs font-bold text-gray-600">Dirección o punto de recojo</label>
+            <input id="addressInput" value="Jr. Lima 240, Chosica" class="w-full mt-1 rounded-xl border px-3 text-sm bg-white shadow-card outline-none focus:ring-2 focus:ring-cinta">
+          </div>
+
+          <h3 class="font-extrabold text-plomo mt-4">¿Cómo pagas? <span class="text-xs font-normal text-gray-500">(pagas al recibir)</span></h3>
+          <div class="grid grid-cols-3 gap-2 mt-2" id="payMethods">
+            <button onclick="setPay('Efectivo')" data-pay="Efectivo" class="pay-btn bg-plomo text-white font-bold rounded-xl py-2 text-sm">💵 Efectivo</button>
+            <button onclick="setPay('Yape')" data-pay="Yape" class="pay-btn bg-white shadow-card font-bold rounded-xl py-2 text-sm">🟣 Yape</button>
+            <button onclick="setPay('Plin')" data-pay="Plin" class="pay-btn bg-white shadow-card font-bold rounded-xl py-2 text-sm">🔵 Plin</button>
+          </div>
+
+          <button onclick="sendOrder()" class="w-full mt-4 bg-cinta hover:bg-cintaLight text-plomo text-lg font-extrabold rounded-2xl py-3 shadow-card">Enviar pedido 🛒</button>
+        </div>
+      </section>
+
+      <!-- PANTALLA 4: CONFIRMACION -->
+      <section id="scr-confirm" class="screen">
+        <div class="px-6 pt-8 text-center">
+          <div class="w-20 h-20 mx-auto bg-listo rounded-full grid place-items-center text-white text-4xl shadow-card">✓</div>
+          <h2 class="font-extrabold text-xl text-plomo mt-3">Pedido enviado</h2>
+          <p class="text-sm mt-1"><b id="confStore">Ferretería Los Andes</b> lo está preparando.<br><span class="bg-cinta/20 font-bold px-2 rounded">Llega / Listo en 25-35 min</span></p>
+          <div class="bg-white rounded-2xl shadow-card p-4 mt-4 text-left text-sm">
+            <p class="font-bold">Detalle · <span id="confCode">#GA-1023</span></p>
+            <div id="confDetail" class="mt-1 text-gray-700"></div>
+            <div class="border-t mt-2 pt-2 flex justify-between"><span>Total</span><b id="confTotal" class="text-etiqueta">S/ 19.00</b></div>
+            <div class="flex justify-between text-xs text-gray-500"><span>Pago</span><b id="confPay">Efectivo</b></div>
+          </div>
+          <a id="waBtn" target="_blank" href="https://wa.me/51987654321?text=Hola%20Los%20Andes%2C%20soy%20tu%20pedido%20G%26A%20Casero" class="block mt-3 bg-listo text-white font-extrabold rounded-2xl py-3">Escribir por WhatsApp 💬</a>
+          <button onclick="show('scr-inicio')" class="w-full mt-2 bg-white shadow-card font-bold rounded-2xl py-3 text-plomo">Hacer otro pedido</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- BARRA FLOTANTE CARRITO -->
+    <div id="cartBar" onclick="show('scr-carrito')" class="hidden absolute bottom-[76px] left-3 right-3 bg-plomo text-white rounded-2xl shadow-pop p-3 flex justify-between items-center font-bold cursor-pointer">
+      <span id="cartBarTxt">Ver carrito (0) · S/ 0.00</span><span class="bg-cinta text-plomo px-3 py-1 rounded-xl">Ver →</span>
+    </div>
+
+    <!-- BOTTOM NAV CLIENTE -->
+    <nav class="absolute bottom-0 left-0 right-0 bg-white border-t grid grid-cols-4 text-[11px] font-bold text-center py-1">
+      <button onclick="show('scr-inicio')" data-nav="scr-inicio" class="nav-btn py-2 text-plomo">🏠<br>Inicio</button>
+      <button onclick="show('scr-catalogo')" data-nav="scr-catalogo" class="nav-btn py-2 text-gray-400">🧾<br>Catálogo</button>
+      <button onclick="show('scr-carrito')" data-nav="scr-carrito" class="nav-btn py-2 text-gray-400 relative">🛒<br>Carrito<span id="navBadge" class="hidden absolute top-1 right-6 bg-etiqueta text-white text-[10px] px-1.5 rounded-full">0</span></button>
+      <button onclick="show('scr-confirm')" data-nav="scr-confirm" class="nav-btn py-2 text-gray-400">📦<br>Pedido</button>
+    </nav>
+  </div>
+
+  <!-- ============ VISTA FERRETERIA ============ -->
+  <div id="viewFerre" class="hidden flex-1 flex-col relative pb-24">
+    <div class="bg-plomo text-white px-4 py-3">
+      <h2 class="font-extrabold">🏪 Panel Los Andes</h2>
+      <p class="text-xs text-white/70">Abierto · a 6 min · 3 pedidos hoy · S/ 86.50</p>
+    </div>
+    <main class="flex-1">
+      <!-- Pedidos -->
+      <section id="f-pedidos" class="screen active px-4 pt-3 space-y-3">
+        <h3 class="font-extrabold text-plomo">Pedidos entrantes</h3>
+        <div id="incomingList" class="space-y-3"></div>
+      </section>
+      <!-- Productos -->
+      <section id="f-productos" class="screen px-4 pt-3">
+        <h3 class="font-extrabold text-plomo">Mis productos</h3>
+        <p class="text-xs text-gray-500">Toca “Hay / Sin stock” para mostrar u ocultar al vecino en 1 toque.</p>
+        <div id="stockList" class="space-y-2 mt-2"></div>
+        <button onclick="fshow('f-agregar')" class="w-full mt-3 border-2 border-dashed border-plomo/30 rounded-2xl py-3 font-bold text-plomo">+ Agregar producto</button>
+      </section>
+      <!-- Agregar -->
+      <section id="f-agregar" class="screen px-4 pt-3">
+        <h3 class="font-extrabold text-plomo">‹ Agregar producto</h3>
+        <label class="block mt-2 bg-white rounded-2xl shadow-card p-6 text-center cursor-pointer">
+          <input type="file" accept="image/*" class="hidden" onchange="toast('Foto cargada ✓ (liviana)')">
+          <div class="text-4xl">📷</div><p class="font-bold text-sm mt-1">Tomar foto</p>
+          <p class="text-[11px] text-gray-400">Se comprime para datos bajos</p>
+        </label>
+        <label class="block mt-3 text-xs font-bold">Nombre<input id="npName" value="Cinta teflón" class="w-full mt-1 rounded-xl border px-3 bg-white text-sm"></label>
+        <label class="block mt-2 text-xs font-bold">Precio (S/)<input id="npPrice" type="number" step="0.10" value="2.50" class="w-full mt-1 rounded-xl border px-3 bg-white text-sm"></label>
+        <label class="block mt-2 text-xs font-bold">Categoría
+          <select id="npCat" class="w-full mt-1 rounded-xl border px-3 bg-white text-sm"><option>Gasfitería</option><option>Electricidad</option><option>Pinturas</option><option>Herramientas</option><option>Candados</option><option>Fijaciones</option></select>
+        </label>
+        <button onclick="addProduct()" class="w-full mt-3 bg-listo text-white font-extrabold rounded-2xl py-3">Guardar ✅</button>
+      </section>
+    </main>
+    <nav class="absolute bottom-0 left-0 right-0 bg-white border-t grid grid-cols-3 text-[11px] font-bold text-center py-1">
+      <button onclick="fshow('f-pedidos')" class="py-2">🧾<br>Pedidos</button>
+      <button onclick="fshow('f-productos')" class="py-2">📦<br>Productos</button>
+      <button onclick="fshow('f-agregar')" class="py-2">➕<br>Agregar</button>
+    </nav>
+  </div>
+
+  <div id="toast" class="hidden absolute top-16 left-1/2 -translate-x-1/2 bg-plomo text-white text-xs font-bold px-4 py-2 rounded-full shadow-xl z-50"></div>
+</div>
+
+<p class="text-center text-[11px] text-gray-500 mt-3 max-w-[430px] mx-auto px-4">🎨 Azul plomo #2C3E50 · Amarillo cinta #F39C12 · Rojo etiqueta #E74C3C · Verde listo #27AE60 · Precios estilo etiqueta de vitrina · Mobile-first sin instalar nada</p>
+
+<script>
+// ---------- DATA ----------
+let CATS = ['Todo','Electricidad','Gasfitería','Pinturas','Herramientas','Candados','Fijaciones'];
+let activeCat = 'Todo';
+let store = 'Ferretería Los Andes';
+let pay = 'Efectivo';
+let cart = {}; // id -> qty
+let orderSeq = 24;
+
+let PRODUCTS = [
+  {id:1, name:'Foco LED 9W', cat:'Electricidad', price:6.50, emoji:'💡', stock:true},
+  {id:2, name:'Cinta aislante', cat:'Electricidad', price:3.00, emoji:'🧵', stock:true},
+  {id:3, name:'Candado 40mm', cat:'Candados', price:14.00, emoji:'🔒', stock:true},
+  {id:4, name:'Enchufe triple', cat:'Electricidad', price:8.00, emoji:'🔌', stock:true},
+  {id:5, name:'Cinta teflón', cat:'Gasfitería', price:2.50, emoji:'🩹', stock:true},
+  {id:6, name:'Tornillo + tarugo x12', cat:'Fijaciones', price:5.50, emoji:'🔩', stock:true},
+  {id:7, name:'Set llaves Allen', cat:'Herramientas', price:12.00, emoji:'🔧', stock:true},
+  {id:8, name:'Pintura spray negro', cat:'Pinturas', price:19.90, emoji:'🎨', stock:true},
+  {id:9, name:'Tomacorriente doble', cat:'Electricidad', price:8.50, emoji:'🔌', stock:true},
+  {id:10, name:'Llave de paso 1/2”', cat:'Gasfitería', price:18.50, emoji:'🚿', stock:true},
+];
+
+let INCOMING = [
+  {id:23, items:'2 focos LED 9W, 1 cinta aislante', total:19.00, pay:'Efectivo', addr:'Jr. Lima 240, Chosica', status:'Nuevo'},
+  {id:22, items:'1 candado 40mm', total:17.00, pay:'Yape', addr:'Recojo en tienda', status:'En camino'},
+];
+
+// ---------- HELPERS ----------
+const $ = s => document.querySelector(s);
+const money = n => 'S/ ' + n.toFixed(2);
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1800); }
+
+function setMode(m){
+  const c = m==='cliente';
+  $('#viewCliente').classList.toggle('hidden',!c);
+  $('#viewCliente').classList.toggle('flex',c);
+  $('#viewFerre').classList.toggle('hidden',c);
+  $('#viewFerre').classList.toggle('flex',!c);
+  $('#modeClienteBtn').className = 'rounded-lg py-2 ' + (c?'bg-cinta text-plomo':'text-white/80');
+  $('#modeFerreBtn').className = 'rounded-lg py-2 ' + (!c?'bg-cinta text-plomo':'text-white/80');
+}
+function show(id){
+  document.querySelectorAll('#viewCliente .screen').forEach(s=>s.classList.remove('active'));
+  $('#'+id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>{ b.classList.toggle('text-plomo', b.dataset.nav===id); b.classList.toggle('text-gray-400', b.dataset.nav!==id); });
+}
+function fshow(id){
+  document.querySelectorAll('#viewFerre .screen').forEach(s=>s.classList.remove('active'));
+  $('#'+id).classList.add('active');
+}
+function goCat(c){ activeCat=c; show('scr-catalogo'); renderCatalog(); }
+function selectStore(s){ store=s; $('#storeNameLbl').textContent=s.replace('Ferretería ',''); $('#storeNameLbl2').textContent=s; $('#pickupStoreLbl').textContent=s.replace('Ferretería ',''); toast('Tienda: '+s+' ✓'); show('scr-catalogo'); }
+function setPay(p){ pay=p; document.querySelectorAll('.pay-btn').forEach(b=>{ const on=b.dataset.pay===p; b.className='pay-btn font-bold rounded-xl py-2 text-sm '+(on?'bg-plomo text-white':'bg-white shadow-card'); }); renderCart(); }
+
+// ---------- CATALOGO ----------
+function renderCatalog(){
+  const q = ($('#searchInput').value||'').toLowerCase();
+  $('#catTabs').innerHTML = CATS.map(c=>`<button onclick="activeCat='${c}';renderCatalog()" class="tab-cat ${activeCat===c?'active':''} whitespace-nowrap px-4 py-2 rounded-full bg-white shadow-card text-xs font-bold">${c}</button>`).join('');
+  const list = PRODUCTS.filter(p=>p.stock && (activeCat==='Todo'||p.cat===activeCat) && p.name.toLowerCase().includes(q));
+  $('#productGrid').innerHTML = list.length ? list.map(p=>`
+    <div class="bg-white rounded-2xl shadow-card p-3 flex flex-col">
+      <div class="text-4xl text-center bg-cemento rounded-xl py-3">${p.emoji}</div>
+      <p class="font-bold text-[13px] mt-2 leading-tight">${p.name}</p>
+      <p class="text-[11px] text-gray-400">${p.cat}</p>
+      <div class="mt-1"><span class="price-tag text-sm">${money(p.price)}</span></div>
+      <button onclick="addToCart(${p.id})" class="mt-2 w-full ${cart[p.id]?'bg-plomo text-white':'bg-cinta text-plomo'} font-extrabold rounded-xl py-2 text-sm">${cart[p.id]?'✓ '+cart[p.id]+' · + Agregar':'Agregar'}</button>
+    </div>`).join('') : `<p class="col-span-2 text-center text-sm text-gray-500 py-8">Sin resultados para “${q}”.<br>Prueba con “foco”, “teflón”…</p>`;
+  updateBar();
+}
+function addToCart(id){ cart[id]=(cart[id]||0)+1; renderCatalog(); renderCart(); toast('Agregado ✓ — ' + PRODUCTS.find(p=>p.id===id).name); }
+function chQty(id,d){ cart[id]=(cart[id]||0)+d; if(cart[id]<=0) delete cart[id]; renderCatalog(); renderCart(); }
+
+function cartTotals(){
+  let sub=0, n=0; for(const [id,q] of Object.entries(cart)){ const p=PRODUCTS.find(x=>x.id==id); if(p){sub+=p.price*q; n+=q;} }
+  const isDel = document.querySelector('input[name="delivery"]:checked')?.value==='delivery';
+  let ship = n===0?0:(isDel?(sub>=45?0:3.00):0);
+  return {sub, ship, total:sub+ship, n, isDel};
+}
+function updateBar(){
+  const t=cartTotals();
+  $('#cartBar').classList.toggle('hidden', t.n===0);
+  $('#cartBarTxt').textContent=`Ver carrito (${t.n}) · ${money(t.total)}`;
+  const b=$('#navBadge'); b.classList.toggle('hidden',t.n===0); b.textContent=t.n;
+}
+function renderCart(){
+  const t=cartTotals();
+  const box=$('#cartList');
+  if(t.n===0){ box.innerHTML=`<div class="bg-white rounded-2xl shadow-card p-6 text-center text-sm text-gray-500">🛒 Tu carrito está vacío.<br><button onclick="show('scr-catalogo')" class="mt-2 bg-cinta font-bold px-4 py-2 rounded-xl text-plomo">Ver catálogo</button></div>`; }
+  else box.innerHTML=Object.entries(cart).map(([id,q])=>{ const p=PRODUCTS.find(x=>x.id==id); return `
+    <div class="bg-white rounded-2xl shadow-card p-3 flex items-center gap-3">
+      <div class="text-3xl bg-cemento rounded-xl w-12 h-12 grid place-items-center">${p.emoji}</div>
+      <div class="flex-1"><p class="font-bold text-sm">${q} × ${p.name}</p><p class="price-tag text-xs mt-1">${money(p.price*q)}</p></div>
+      <div class="flex items-center gap-1">
+        <button onclick="chQty(${id},-1)" class="w-9 h-9 rounded-xl bg-gray-100 font-extrabold">−</button>
+        <b class="w-6 text-center">${q}</b>
+        <button onclick="chQty(${id},1)" class="w-9 h-9 rounded-xl bg-cinta font-extrabold">+</button>
+      </div>
+    </div>`; }).join('');
+  $('#subTotalLbl').textContent=money(t.sub);
+  $('#shipLbl').textContent = t.n===0?'—':(t.ship===0?(t.isDel?'Gratis 🎉':'Gratis · recojo') : money(t.ship));
+  $('#totalLbl').textContent=money(t.total);
+  updateBar();
+}
+
+// ---------- PEDIDO ----------
+function sendOrder(){
+  const t=cartTotals();
+  if(t.n===0){ toast('Agrega al menos 1 producto 🛒'); return; }
+  const code='#GA-'+(1020+orderSeq);
+  const itemsTxt = Object.entries(cart).map(([id,q])=>`${q}× ${PRODUCTS.find(p=>p.id==id).name}`).join(', ');
+  $('#confCode').textContent=code;
+  $('#confStore').textContent=store;
+  $('#confDetail').innerHTML=`${t.n} productos: ${itemsTxt}<br>Delivery: ${t.ship===0?'Gratis / Recojo':money(t.ship)}${t.isDel?' 🛵':' 🏃'}<br>📍 ${$('#addressInput').value}`;
+  $('#confTotal').textContent=money(t.total);
+  $('#confPay').textContent=pay;
+  $('#waBtn').href=`https://wa.me/51987654321?text=${encodeURIComponent('Hola '+store+', soy tu pedido '+code+' G&A Casero: '+itemsTxt+' — Total '+money(t.total)+' ('+pay+')')}`;
+  INCOMING.unshift({id:orderSeq, items:itemsTxt, total:t.total, pay, addr:$('#addressInput').value, status:'Nuevo'});
+  orderSeq++; cart={}; renderCatalog(); renderCart(); renderIncoming();
+  show('scr-confirm'); toast('¡Pedido enviado! 🎉');
+}
+
+// ---------- FERRETERIA ----------
+function renderIncoming(){
+  $('#incomingList').innerHTML = INCOMING.map(o=>`
+    <div class="rounded-2xl shadow-card p-3 ${o.status==='Nuevo'?'bg-cinta/20 border-2 border-cinta':'bg-white'}">
+      <div class="flex justify-between items-center">
+        <b class="text-sm">Pedido #${o.id}</b>
+        <span class="text-[11px] font-extrabold px-2 py-1 rounded-full ${o.status==='Nuevo'?'bg-cinta text-plomo':'bg-gray-200 text-gray-600'}">${o.status}</span>
+      </div>
+      <p class="text-sm mt-1">${o.items}</p>
+      <p class="text-xs text-gray-500">${money(o.total)} · ${o.pay} · 📍 ${o.addr}</p>
+      ${o.status==='Nuevo'?`<div class="grid grid-cols-2 gap-2 mt-2">
+        <button onclick="orderState(${o.id},'En camino')" class="bg-listo text-white font-extrabold rounded-xl py-2">Aceptar</button>
+        <button onclick="orderState(${o.id},'Rechazado')" class="bg-white border font-bold rounded-xl py-2">Rechazar</button>
+      </div>`:`<p class="text-[11px] mt-2 text-gray-400">+ WhatsApp automático enviado ✓</p>`}
+    </div>`).join('');
+}
+function orderState(id,st){ const o=INCOMING.find(x=>x.id===id); o.status=st; renderIncoming(); toast(st==='En camino'?'Pedido aceptado ✅':'Pedido rechazado'); }
+
+function renderStock(){
+  $('#stockList').innerHTML = PRODUCTS.map(p=>`
+    <div class="bg-white rounded-2xl shadow-card p-3 flex items-center gap-3 ${!p.stock?'opacity-60':''}">
+      <div class="text-2xl">${p.emoji}</div>
+      <div class="flex-1"><p class="font-bold text-sm">${p.name}</p><p class="price-tag text-[11px]">${money(p.price)}</p></div>
+      <button onclick="toggleStock(${p.id})" class="font-extrabold text-xs px-3 py-2 rounded-full ${p.stock?'bg-listo text-white':'bg-etiqueta text-white'}">${p.stock?'Hay ✓':'Sin stock'}</button>
+    </div>`).join('');
+}
+function toggleStock(id){ const p=PRODUCTS.find(x=>x.id===id); p.stock=!p.stock; renderStock(); renderCatalog(); toast(p.name+(p.stock?' visible 👀':' oculto')); }
+function addProduct(){
+  const n=$('#npName').value.trim(), pr=parseFloat($('#npPrice').value), c=$('#npCat').value;
+  if(!n||!(pr>0)){ toast('Completa nombre y precio'); return; }
+  PRODUCTS.unshift({id:Date.now(), name:n, cat:c, price:pr, emoji:'📦', stock:true});
+  renderStock(); renderCatalog(); fshow('f-productos'); toast('Producto guardado ✅');
+}
+
+renderCatalog(); renderCart(); renderIncoming(); renderStock();
+</script>
+</body>
+</html>

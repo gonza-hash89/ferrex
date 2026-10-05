@@ -1,0 +1,15 @@
+# Secretos y entorno — NUNCA subir al repo
+.env
+.env.local
+.env.*.local
+
+# Base de datos local y subidas (efímeras en free tier; ver DEPLOY.md)
+db.json
+db.json.corrupt-*
+db.json.tmp
+uploads/*
+
+# Dependencias y logs
+node_modules/
+*.log
+npm-debug.log*

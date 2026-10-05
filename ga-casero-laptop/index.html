@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&A Casero — Web Laptop | Ferretería de barrio al toque</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{plomo:'#2C3E50',plomoDark:'#1A252F',cinta:'#F39C12',cintaLight:'#F1C40F',etiqueta:'#E74C3C',listo:'#27AE60',cemento:'#F8F9FA'},fontFamily:{sans:['Inter','Roboto','system-ui']},boxShadow:{card:'0 4px 16px rgba(44,62,80,.10)',pop:'0 12px 40px rgba(0,0,0,.18)'}}}}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:Inter,Roboto,system-ui}
+.price-tag{position:relative;background:#E74C3C;color:#fff;font-weight:800;padding:.25rem .7rem;border-radius:.55rem;display:inline-block}
+.price-tag::after{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);border:6px solid transparent;border-right-color:#E74C3C;border-left:0}
+.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
+.view{display:none}.view.active{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.cat-pill.active{background:#2C3E50;color:#fff;border-color:#2C3E50}
+.modal-bg{background:rgba(26,37,47,.6);backdrop-filter:blur(3px)}
+</style>
+</head>
+<body class="bg-cemento text-gray-800">
+
+<!-- TOPBAR -->
+<div class="bg-plomoDark text-white text-xs">
+  <div class="max-w-7xl mx-auto px-4 py-1.5 flex justify-between">
+    <span>📍 Piloto: Chosica · Miraflores · Surco · San Borja | Radio 3km</span>
+    <span class="hidden md:inline">Click & Collect gratis · Delivery S/3.00 · Yape / Plin / Efectivo</span>
+  </div>
+</div>
+
+<!-- HEADER LAPTOP -->
+<header class="bg-plomo text-white sticky top-0 z-40 shadow-lg">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
+    <div class="flex items-center gap-2 shrink-0">
+      <div class="w-10 h-10 bg-cinta rounded-xl grid place-items-center text-2xl font-black text-plomo">G&A</div>
+      <div>
+        <h1 class="font-black text-xl leading-none">G&A <span class="text-cintaLight">Casero</span></h1>
+        <p class="text-[11px] text-white/60">La ferretería de tu barrio, al toque</p>
+      </div>
+    </div>
+    <button onclick="toast('Ubicación: Chosica 📍')" class="hidden md:flex items-center gap-1 bg-white/10 px-3 py-2 rounded-xl text-sm font-bold">📍 Chosica ▾</button>
+    <div class="flex-1 relative max-w-2xl">
+      <input id="searchInput" oninput="render()" placeholder="¿Qué necesitas hoy? Busca teflón, foco LED, candado, broca…" class="w-full rounded-xl pl-11 pr-4 py-2.5 text-gray-900 outline-none focus:ring-2 focus:ring-cinta">
+      <span class="absolute left-3 top-2.5 text-lg">🔎</span>
+    </div>
+    <nav class="hidden lg:flex gap-4 text-sm font-bold text-white/80">
+      <a href="#catalogo" class="hover:text-cintaLight">Catálogo</a>
+      <a href="#tiendas" class="hover:text-cintaLight">Tiendas</a>
+      <a href="#como" class="hover:text-cintaLight">Cómo funciona</a>
+    </nav>
+    <div class="flex items-center gap-2">
+      <div class="hidden sm:flex bg-white/10 rounded-xl p-1 text-xs font-bold">
+        <button id="btnCli" onclick="setMode('cliente')" class="px-3 py-1.5 rounded-lg bg-cinta text-plomo">Vecino</button>
+        <button id="btnFer" onclick="setMode('ferre')" class="px-3 py-1.5 rounded-lg text-white/70">Ferretería</button>
+      </div>
+      <button onclick="openCart()" class="relative bg-cinta text-plomo font-extrabold px-4 py-2.5 rounded-xl">🛒 Carrito <span id="cartCount" class="absolute -top-2 -right-2 bg-etiqueta text-white text-xs w-6 h-6 grid place-items-center rounded-full">0</span></button>
+    </div>
+  </div>
+  <div class="md:hidden px-4 pb-3 flex gap-2">
+    <button onclick="setMode('cliente')" class="flex-1 bg-cinta text-plomo text-xs font-bold py-2 rounded-lg">Vecino</button>
+    <button onclick="setMode('ferre')" class="flex-1 bg-white/10 text-xs font-bold py-2 rounded-lg">Ferretería</button>
+  </div>
+</header>
+
+<!-- VISTA CLIENTE -->
+<div id="viewCliente" class="view active">
+
+  <!-- HERO LAPTOP -->
+  <section class="bg-gradient-to-r from-plomo to-plomoDark text-white">
+    <div class="max-w-7xl mx-auto px-4 py-10 grid md:grid-cols-2 gap-8 items-center">
+      <div>
+        <span class="bg-cinta text-plomo text-xs font-black px-3 py-1 rounded-full">⚡ ENTREGA 25-35 MIN · RECOJO 30 MIN</span>
+        <h2 class="text-4xl lg:text-5xl font-black mt-3 leading-tight">No pierdas 90 min por un <span class="text-cintaLight">tornillo.</span></h2>
+        <p class="text-white/70 mt-3">Fijaciones, teflón, focos, candados y más de tu ferretería aliada. Pide en 3 toques, paga con Yape al recibir.</p>
+        <div class="flex gap-3 mt-5">
+          <a href="#catalogo" class="bg-cinta text-plomo font-extrabold px-6 py-3 rounded-xl">Ver catálogo →</a>
+          <a href="#como" class="bg-white/10 font-bold px-6 py-3 rounded-xl">Recojo gratis</a>
+        </div>
+        <div class="flex gap-6 mt-6 text-sm">
+          <div><b class="text-xl">200+</b><br><span class="text-white/60">SKUs urgentes</span></div>
+          <div><b class="text-xl">S/3.00</b><br><span class="text-white/60">delivery plano</span></div>
+          <div><b class="text-xl">0 colas</b><br><span class="text-white/60">con Click & Collect</span></div>
+        </div>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div class="bg-white text-gray-800 rounded-2xl p-4 shadow-pop">
+          <p class="text-xs font-bold text-listo">● ABIERTO · A 6 MIN</p>
+          <h3 class="font-extrabold">Ferretería Los Andes</h3>
+          <p class="text-xs text-gray-500">Jr. Lima 320, Chosica</p>
+          <div class="mt-2 text-4xl">🔩💡🔒</div>
+          <button onclick="selectStore('Ferretería Los Andes')" class="mt-3 w-full bg-plomo text-white font-bold py-2 rounded-xl text-sm">Pedir aquí</button>
+        </div>
+        <div class="bg-white text-gray-800 rounded-2xl p-4 shadow-pop">
+          <p class="text-xs font-bold text-listo">● ABIERTO · A 9 MIN</p>
+          <h3 class="font-extrabold">Ferretería San José</h3>
+          <p class="text-xs text-gray-500">Av. 28 de Julio 140</p>
+          <div class="mt-2 text-4xl">🚿🎨🔧</div>
+          <button onclick="selectStore('Ferretería San José')" class="mt-3 w-full bg-cinta text-plomo font-bold py-2 rounded-xl text-sm">Pedir aquí</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTENIDO 3 COLUMNAS -->
+  <main id="catalogo" class="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-[240px_1fr_320px] gap-6 items-start">
+
+    <!-- SIDEBAR -->
+    <aside class="hidden lg:block space-y-4 sticky top-24">
+      <div class="bg-white rounded-2xl shadow-card p-4">
+        <h3 class="font-extrabold text-plomo">Categorías</h3>
+        <div id="catSide" class="mt-2 space-y-1"></div>
+      </div>
+      <div id="tiendas" class="bg-white rounded-2xl shadow-card p-4">
+        <h3 class="font-extrabold text-plomo">Ferreterías aliadas</h3>
+        <div class="mt-2 space-y-2 text-sm">
+          <button onclick="selectStore('Ferretería Los Andes')" class="w-full text-left p-2 rounded-xl border-2 border-cinta"><b>Los Andes</b><br><span class="text-xs text-gray-500">6 min · Abierto</span></button>
+          <button onclick="selectStore('Ferretería San José')" class="w-full text-left p-2 rounded-xl border"><b>San José</b><br><span class="text-xs text-gray-500">9 min · Abierto</span></button>
+        </div>
+      </div>
+      <div id="como" class="bg-plomo text-white rounded-2xl p-4 text-xs">
+        <b>🏃 Click & Collect en 3 pasos:</b><br>1. Pide y elige recojo gratis<br>2. La tienda empaqueta en 30 min<br>3. Muestra tu código QR sin cola
+      </div>
+    </aside>
+
+    <!-- CATALOGO -->
+    <section>
+      <div class="flex items-center justify-between">
+        <h2 class="font-black text-2xl text-plomo">Catálogo <span id="storeLbl" class="text-sm font-bold text-gray-500">· Los Andes</span></h2>
+        <span class="text-xs bg-listo/10 text-listo font-bold px-3 py-1 rounded-full">● Stock en vivo</span>
+      </div>
+      <div id="catPills" class="flex gap-2 overflow-x-auto no-scrollbar mt-3 pb-1"></div>
+      <div id="grid" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-4"></div>
+    </section>
+
+    <!-- CARRITO LATERAL -->
+    <aside class="bg-white rounded-2xl shadow-card p-5 sticky top-24 hidden lg:block">
+      <h3 class="font-extrabold text-plomo text-lg">🧾 Tu pedido</h3>
+      <div id="cartSide" class="mt-3 space-y-2 text-sm max-h-64 overflow-auto"></div>
+      <div class="border-t mt-3 pt-3 text-sm space-y-1">
+        <div class="flex justify-between"><span>Subtotal</span><b id="subLbl">S/ 0.00</b></div>
+        <div class="flex justify-between"><span>Envío</span><b id="shipLbl">—</b></div>
+        <div class="flex justify-between text-lg"><span class="font-extrabold">Total</span><b id="totLbl" class="text-etiqueta">S/ 0.00</b></div>
+      </div>
+      <label class="flex items-center gap-2 mt-3 text-sm bg-cemento p-2 rounded-xl cursor-pointer border-2 border-cinta"><input type="radio" name="delivery" value="delivery" checked onchange="render()" class="accent-[#F39C12]"> 🛵 Delivery S/3.00</label>
+      <label class="flex items-center gap-2 mt-2 text-sm bg-cemento p-2 rounded-xl cursor-pointer"><input type="radio" name="delivery" value="recojo" onchange="render()" class="accent-[#F39C12]"> 🏃 Recojo gratis</label>
+      <input id="addr" value="Jr. Lima 240, Chosica" class="w-full mt-2 border rounded-xl px-3 py-2 text-sm" placeholder="Dirección de entrega">
+      <div class="grid grid-cols-3 gap-2 mt-2">
+        <button onclick="setPay('Efectivo')" data-pay="Efectivo" class="pay-btn bg-plomo text-white font-bold rounded-xl py-2 text-xs">Efectivo</button>
+        <button onclick="setPay('Yape')" data-pay="Yape" class="pay-btn bg-gray-100 font-bold rounded-xl py-2 text-xs">Yape</button>
+        <button onclick="setPay('Plin')" data-pay="Plin" class="pay-btn bg-gray-100 font-bold rounded-xl py-2 text-xs">Plin</button>
+      </div>
+      <button onclick="sendOrder()" class="w-full mt-3 bg-cinta text-plomo font-black text-lg py-3 rounded-xl">Enviar pedido →</button>
+      <p class="text-[11px] text-gray-400 text-center mt-2">Pagás al recibir · WhatsApp directo con la tienda</p>
+    </aside>
+  </main>
+
+  <footer class="bg-plomoDark text-white mt-10">
+    <div class="max-w-7xl mx-auto px-4 py-8 grid md:grid-cols-3 gap-6 text-sm">
+      <div><b>G&A Casero</b><p class="text-white/60 text-xs mt-1">Marketplace de proximidad + Click & Collect. Comisión 8-15% para ferreterías. Flete diluido por batching 3-5km.</p></div>
+      <div><b>Zona piloto</b><p class="text-white/60 text-xs mt-1">Miraflores · Surco · San Borja · Chosica<br>200 SKUs · Entrega 25-35 min</p></div>
+      <div><b>Ayuda criolla</b><p class="text-white/60 text-xs mt-1">¿Se te quemó el foco? ¿Gotea el caño? Escríbenos por WhatsApp y te armamos el kit al toque 💬</p></div>
+    </div>
+  </footer>
+</div>
+
+<!-- VISTA FERRETERIA / DASHBOARD -->
+<div id="viewFerre" class="view">
+  <div class="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-[220px_1fr] gap-6 items-start">
+    <aside class="bg-plomo text-white rounded-2xl p-4 sticky top-24">
+      <h3 class="font-black">🏪 Panel Los Andes</h3>
+      <p class="text-xs text-white/60">Abierto · S/86.50 hoy</p>
+      <div class="mt-4 space-y-1 text-sm font-bold">
+        <button onclick="fshow('f-ped')" class="w-full text-left bg-cinta text-plomo px-3 py-2 rounded-xl">🧾 Pedidos</button>
+        <button onclick="fshow('f-stock')" class="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10">📦 Mis productos</button>
+        <button onclick="fshow('f-add')" class="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10">➕ Agregar</button>
+      </div>
+    </aside>
+    <div>
+      <section id="f-ped" class="view active"><h2 class="font-black text-xl text-plomo">Pedidos entrantes</h2><div id="inList" class="grid md:grid-cols-2 gap-3 mt-3"></div></section>
+      <section id="f-stock" class="view"><h2 class="font-black text-xl text-plomo">Stock en 1 toque</h2><div id="stockTbl" class="bg-white rounded-2xl shadow-card mt-3 divide-y"></div></section>
+      <section id="f-add" class="view">
+        <h2 class="font-black text-xl text-plomo">Agregar producto</h2>
+        <div class="bg-white rounded-2xl shadow-card p-5 mt-3 grid md:grid-cols-2 gap-4 max-w-2xl">
+          <label class="border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer">📷<br><b>Tomar foto</b><input type="file" class="hidden"></label>
+          <div class="space-y-2">
+            <input id="npN" value="Cinta teflón" class="w-full border rounded-xl px-3 py-2" placeholder="Nombre">
+            <input id="npP" type="number" value="2.50" step="0.1" class="w-full border rounded-xl px-3 py-2" placeholder="Precio S/">
+            <select id="npC" class="w-full border rounded-xl px-3 py-2"><option>Gasfitería</option><option>Electricidad</option><option>Fijaciones</option><option>Herramientas</option><option>Pinturas</option><option>Candados</option></select>
+            <button onclick="addP()" class="w-full bg-listo text-white font-extrabold py-2.5 rounded-xl">Guardar ✅</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER CARRITO MOVIL -->
+<div id="cartDrawer" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 modal-bg" onclick="closeCart()"></div>
+  <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white p-5 overflow-auto">
+    <div class="flex justify-between items-center"><h3 class="font-black text-lg">🛒 Tu pedido</h3><button onclick="closeCart()" class="text-2xl">×</button></div>
+    <div id="cartMob" class="mt-3 space-y-2 text-sm"></div>
+    <button onclick="sendOrder()" class="w-full mt-4 bg-cinta font-black py-3 rounded-xl">Enviar pedido →</button>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMACION -->
+<div id="okModal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 modal-bg"></div>
+  <div class="absolute inset-0 grid place-items-center p-4">
+    <div class="bg-white rounded-3xl shadow-pop max-w-md w-full p-6 text-center">
+      <div class="w-16 h-16 mx-auto bg-listo text-white text-3xl grid place-items-center rounded-full">✓</div>
+      <h3 class="font-black text-xl mt-2">¡Pedido enviado!</h3>
+      <p id="okTxt" class="text-sm text-gray-600 mt-1"></p>
+      <a id="waLink" target="_blank" class="block mt-3 bg-listo text-white font-extrabold py-3 rounded-xl">Hablar por WhatsApp 💬</a>
+      <button onclick="document.getElementById('okModal').classList.add('hidden')" class="w-full mt-2 bg-gray-100 font-bold py-3 rounded-xl">Seguir comprando</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-plomo text-white text-sm font-bold px-5 py-2.5 rounded-full z-[60]"></div>
+
+<script>
+let CATS=['Todo','Electricidad','Gasfitería','Pinturas','Herramientas','Candados','Fijaciones'];
+let activeCat='Todo', store='Ferretería Los Andes', pay='Efectivo', cart={}, seq=24;
+let PRODUCTS=[
+ {id:1,name:'Foco LED 9W',cat:'Electricidad',price:6.50,emoji:'💡',stock:true},
+ {id:2,name:'Cinta aislante 3M',cat:'Electricidad',price:3.00,emoji:'🧵',stock:true},
+ {id:3,name:'Candado Forte 40mm',cat:'Candados',price:14.00,emoji:'🔒',stock:true},
+ {id:4,name:'Enchufe triple',cat:'Electricidad',price:8.00,emoji:'🔌',stock:true},
+ {id:5,name:'Cinta teflón',cat:'Gasfitería',price:2.50,emoji:'🩹',stock:true},
+ {id:6,name:'Pack tornillo+tarugo x12',cat:'Fijaciones',price:5.50,emoji:'🔩',stock:true},
+ {id:7,name:'Set llaves Allen',cat:'Herramientas',price:12.00,emoji:'🔧',stock:true},
+ {id:8,name:'Pintura spray',cat:'Pinturas',price:19.90,emoji:'🎨',stock:true},
+ {id:9,name:'Tomacorriente doble',cat:'Electricidad',price:8.50,emoji:'🔌',stock:true},
+ {id:10,name:'Llave de paso 1/2”',cat:'Gasfitería',price:18.50,emoji:'🚿',stock:true},
+ {id:11,name:'Broca HSS 5mm',cat:'Fijaciones',price:4.50,emoji:'🪛',stock:true},
+ {id:12,name:'Silicona transparente',cat:'Gasfitería',price:11.00,emoji:'🧴',stock:true},
+];
+let INCOMING=[{id:23,items:'2× Foco LED 9W, 1× Cinta aislante',total:19.00,pay:'Efectivo',addr:'Jr. Lima 240',st:'Nuevo'},{id:22,items:'1× Candado Forte 40mm',total:17.00,pay:'Yape',addr:'Recojo en tienda',st:'En camino'}];
+const $=s=>document.querySelector(s), money=n=>'S/ '+n.toFixed(2);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),1800);}
+function setMode(m){const c=m==='cliente';$('#viewCliente').classList.toggle('active',c);$('#viewFerre').classList.toggle('active',!c);$('#btnCli').className='px-3 py-1.5 rounded-lg '+(c?'bg-cinta text-plomo':'text-white/70');$('#btnFer').className='px-3 py-1.5 rounded-lg '+(!c?'bg-cinta text-plomo':'text-white/70');}
+function fshow(id){document.querySelectorAll('#viewFerre .view').forEach(v=>v.classList.remove('active'));$('#'+id).classList.add('active');}
+function selectStore(s){store=s;$('#storeLbl').textContent='· '+s.replace('Ferretería ','');toast('Tienda: '+s+' ✓');document.getElementById('catalogo').scrollIntoView({behavior:'smooth'});}
+function setPay(p){pay=p;document.querySelectorAll('.pay-btn').forEach(b=>{const on=b.dataset.pay===p;b.className='pay-btn font-bold rounded-xl py-2 text-xs '+(on?'bg-plomo text-white':'bg-gray-100');});}
+function totals(){let sub=0,n=0;for(const[id,q]of Object.entries(cart)){const p=PRODUCTS.find(x=>x.id==id);if(p){sub+=p.price*q;n+=q;}}const del=document.querySelector('input[name=delivery]:checked')?.value==='delivery';let ship=n===0?0:(del?(sub>=45?0:3):0);return{sub,ship,total:sub+ship,n,del};}
+function add(id){cart[id]=(cart[id]||0)+1;render();toast('Agregado ✓');}
+function ch(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];render();}
+function render(){
+ const q=($('#searchInput').value||'').toLowerCase();
+ $('#catPills').innerHTML=CATS.map(c=>`<button onclick="activeCat='${c}';render()" class="cat-pill ${activeCat===c?'active':''} whitespace-nowrap px-4 py-2 rounded-full border bg-white text-xs font-bold">${c}</button>`).join('');
+ $('#catSide').innerHTML=CATS.map(c=>`<button onclick="activeCat='${c}';render()" class="w-full text-left px-3 py-2 rounded-xl text-sm font-bold ${activeCat===c?'bg-plomo text-white':'hover:bg-gray-100'}">${c}</button>`).join('');
+ const list=PRODUCTS.filter(p=>p.stock&&(activeCat==='Todo'||p.cat===activeCat)&&p.name.toLowerCase().includes(q));
+ $('#grid').innerHTML=list.map(p=>`<div class="bg-white rounded-2xl shadow-card p-4 flex flex-col hover:shadow-pop transition">
+   <div class="text-5xl text-center bg-cemento rounded-xl py-5">${p.emoji}</div>
+   <p class="text-[11px] text-gray-400 mt-2 font-bold uppercase">${p.cat}</p>
+   <h3 class="font-extrabold leading-tight">${p.name}</h3>
+   <div class="mt-1"><span class="price-tag">${money(p.price)}</span></div>
+   <button onclick="add(${p.id})" class="mt-3 w-full ${cart[p.id]?'bg-plomo text-white':'bg-cinta text-plomo'} font-extrabold py-2.5 rounded-xl">${cart[p.id]?'✓ '+cart[p.id]+' en carrito · +':'+ Agregar'}</button></div>`).join('')||`<p class="text-gray-500 col-span-3 text-center py-10">Sin resultados. Prueba “foco”, “teflón”…</p>`;
+ const t=totals();
+ $('#cartCount').textContent=t.n;
+ const html=t.n===0?`<p class="text-gray-400 text-center py-6">🛒 Vacío.<br>Agrega algo urgente 👆</p>`:Object.entries(cart).map(([id,q])=>{const p=PRODUCTS.find(x=>x.id==id);return `<div class="flex items-center gap-2 bg-cemento rounded-xl p-2"><span class="text-2xl">${p.emoji}</span><div class="flex-1"><b>${q}× ${p.name}</b><br><span class="text-etiqueta font-bold">${money(p.price*q)}</span></div><button onclick="ch(${id},-1)" class="w-8 h-8 bg-white rounded-lg font-black">−</button><button onclick="ch(${id},1)" class="w-8 h-8 bg-cinta rounded-lg font-black">+</button></div>`}).join('');
+ $('#cartSide').innerHTML=html; $('#cartMob').innerHTML=html;
+ $('#subLbl').textContent=money(t.sub); $('#shipLbl').textContent=t.n===0?'—':(t.ship===0?'Gratis 🎉':money(t.ship)); $('#totLbl').textContent=money(t.total);
+ renderFerre();
+}
+function openCart(){render();$('#cartDrawer').classList.remove('hidden');}
+function closeCart(){$('#cartDrawer').classList.add('hidden');}
+function sendOrder(){
+ const t=totals(); if(t.n===0){toast('Agrega 1 producto 🛒');return;}
+ const code='#GA-'+(1020+seq);
+ const items=Object.entries(cart).map(([id,q])=>`${q}× ${PRODUCTS.find(p=>p.id==id).name}`).join(', ');
+ const addr=$('#addr').value||'Jr. Lima 240, Chosica';
+ $('#okTxt').innerHTML=`<b>${store}</b> prepara tu pedido ${code}.<br>${items}<br>Total <b>${money(t.total)}</b> · ${pay} · ${t.del?'Delivery 🛵':'Recojo 🏃'}<br>📍 ${addr}`;
+ $('#waLink').href=`https://wa.me/51987654321?text=${encodeURIComponent('Hola '+store+', pedido '+code+': '+items+' Total '+money(t.total))}`;
+ $('#okModal').classList.remove('hidden'); closeCart();
+ INCOMING.unshift({id:seq,items,total:t.total,pay,addr,st:'Nuevo'}); seq++; cart={}; render();
+}
+function renderFerre(){
+ $('#inList').innerHTML=INCOMING.map(o=>`<div class="rounded-2xl p-4 shadow-card ${o.st==='Nuevo'?'bg-cinta/15 border-2 border-cinta':'bg-white'}"><div class="flex justify-between"><b>#${o.id}</b><span class="text-xs font-black px-2 py-1 rounded-full ${o.st==='Nuevo'?'bg-cinta':'bg-gray-200'}">${o.st}</span></div><p class="text-sm mt-1">${o.items}</p><p class="text-xs text-gray-500">${money(o.total)} · ${o.pay} · ${o.addr}</p>${o.st==='Nuevo'?`<div class="grid grid-cols-2 gap-2 mt-2"><button onclick="st(${o.id},'En camino')" class="bg-listo text-white font-extrabold py-2 rounded-xl">Aceptar</button><button onclick="st(${o.id},'Rechazado')" class="bg-white border font-bold py-2 rounded-xl">Rechazar</button></div>`:''}</div>`).join('');
+ $('#stockTbl').innerHTML=PRODUCTS.map(p=>`<div class="flex items-center gap-3 p-3 ${!p.stock?'opacity-50':''}"><span class="text-2xl">${p.emoji}</span><div class="flex-1"><b class="text-sm">${p.name}</b> <span class="price-tag text-xs ml-1">${money(p.price)}</span><br><span class="text-xs text-gray-400">${p.cat}</span></div><button onclick="tog(${p.id})" class="text-xs font-black px-4 py-2 rounded-full ${p.stock?'bg-listo text-white':'bg-etiqueta text-white'}">${p.stock?'HAY ✓':'SIN STOCK'}</button></div>`).join('');
+}
+function st(id,s){INCOMING.find(o=>o.id===id).st=s;renderFerre();toast(s==='En camino'?'Aceptado ✅':'Rechazado');}
+function tog(id){const p=PRODUCTS.find(x=>x.id===id);p.stock=!p.stock;render();}
+function addP(){const n=$('#npN').value.trim(),pr=parseFloat($('#npP').value);if(!n||!(pr>0)){toast('Completa nombre y precio');return;}PRODUCTS.unshift({id:Date.now(),name:n,cat:$('#npC').value,price:pr,emoji:'📦',stock:true});render();fshow('f-stock');toast('Guardado ✅');}
+render();
+</script>
+</body>
+</html>
