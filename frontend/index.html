@@ -177,7 +177,8 @@ input,select,button{min-height:44px}
 
 <!-- MODAL TIENDA -->
 <div id="storeModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/60" onclick="closeModal('storeModal')"></div>
-<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="storeForm" class="bg-white rounded-2xl p-5 w-full max-w-md space-y-2" onsubmit="saveStore(event)">
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="storeForm" class="bg-white rounded-2xl p-5 w-full max-w-md space-y-2 relative" onsubmit="saveStore(event)">
+<button type="button" onclick="closeModal('storeModal')" class="absolute top-3 right-3 text-2xl text-gray-400 hover:text-gray-700 font-bold leading-none" aria-label="Cerrar">✕</button>
 <h3 class="font-black text-lg">🏪 Registrar mi ferretería</h3>
 <input name="nombre" required minlength="3" maxlength="80" placeholder="Nombre: Ferretería Los Alisos" class="w-full border rounded-xl px-3 py-2 text-sm">
 <input name="distrito" required maxlength="60" placeholder="Distrito: Chosica" class="w-full border rounded-xl px-3 py-2 text-sm">
