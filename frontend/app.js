@@ -733,9 +733,6 @@ function buildOrderMessage(order, store) {
   const paymentText = `💳 Pago: ${order.pay}`;
   return `📋 *Nuevo Pedido ${order.code}*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 *Total: S/ ${order.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
 }
-  const paymentText = `💳 Pago: ${order.pay}`;
-  return `📋 *Nuevo Pedido ${order.code}*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 *Total: S/ ${order.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
-}
 function copyWa() { navigator.clipboard?.writeText(window._lastWa || '').then(() => toast('Mensaje copiado 📋')).catch(() => toast('No se pudo copiar')); }
 
 /* ---------- ferretería: stock ---------- */
@@ -947,4 +944,16 @@ async function setOrder(id, st) {
   catch (e) { toast(e.message); }
 }
 
-init();
+// Inicialización segura con DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    init();
+  } catch (err) {
+    console.error('Error inicializando app:', err);
+  }
+});
+
+// Safe event listener helpers
+function safeOn(id, event, handler) {
+  document.getElementById(id)?.addEventListener(event, handler);
+}
