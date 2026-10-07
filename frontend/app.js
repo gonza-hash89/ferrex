@@ -157,6 +157,20 @@ function handleDeepLink(extraDistritos = []) {
 }
 async function init() {
   paintSoundBtn(); paintLoc(); handleDeepLink(); initLegal();
+  
+  // Restaurar sesión demo si existe
+  const demoSession = localStorage.getItem('ga_active_store');
+  if (demoSession) {
+    try {
+      const store = JSON.parse(demoSession);
+      storeId = store.id;
+      localStorage.setItem('ga_store', storeId);
+      AT = 'demo-token-' + Date.now();
+      await loadStores();
+      paintSession();
+    } catch {}
+  }
+  
   try {
     const h = await api('/health');
     $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
@@ -261,28 +275,113 @@ async function apiAuth(path, method, body, retried) {
 }
 async function login(e) {
   e.preventDefault();
-  const fd = new FormData(e.target);
+  const form = e.target;
+  const submitBtn = $('#loginSubmitBtn');
+  const errorDiv = $('#loginFormError');
+  
+  const identifier = form.querySelector('[name=identifier]').value.trim();
+  const password = form.querySelector('[name=password]').value;
+  
+  if (!identifier || !password) {
+    errorDiv.textContent = '⚠ Complete celular y contraseña.';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = 'Entrando... <span class="animate-spin">⏳</span>';
+  errorDiv.classList.add('hidden');
+  
   try {
-    const r = await fetch(apiURL('/auth/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ identifier: fd.get('identifier'), password: fd.get('password') }) });
+    // 1. Intentar API
+    const r = await fetch(apiURL('/auth/login'), { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      credentials: 'include', 
+      body: JSON.stringify({ identifier, password }) 
+    });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+    
+    // Éxito API
     AT = j.accessToken;
-    storeId = j.store.id; localStorage.setItem('ga_store', storeId);
-    closeModal('loginModal'); e.target.reset();
-    await loadStores(); paintSession(); setMode('f');
-    toast(`Bienvenido, ${j.store.nombre} ✅`);
-  } catch (err) { toast(err.message); }
+    storeId = j.store.id; 
+    localStorage.setItem('ga_store', storeId);
+    toast(`¡Bienvenido, ${j.store.nombre}! ✅`);
+    closeModal('loginModal'); 
+    form.reset();
+    await loadStores(); 
+    paintSession(); 
+    setMode('f');
+  } catch (err) {
+    // 2. Fallback: buscar en localStorage demo stores
+    console.warn('API login falló, probando localStorage:', err.message);
+    
+    let demoStores = [];
+    try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
+    
+    // Buscar por teléfono o celular
+    const matchedStore = demoStores.find(s => 
+      (s.telefono === identifier || s.whatsapp === identifier || s.celular === identifier) && 
+      s.password === password
+    );
+    
+    if (matchedStore) {
+      // Guardar sesión en localStorage
+      localStorage.setItem('ga_active_store', JSON.stringify(matchedStore));
+      localStorage.setItem('ga_store', matchedStore.id);
+      storeId = matchedStore.id;
+      AT = 'demo-token-' + Date.now(); // token simulado
+      
+      toast(`¡Sesión iniciada correctamente! Bienvenido, ${matchedStore.nombre} ✅`);
+      closeModal('loginModal'); 
+      form.reset();
+      await loadStores(); 
+      paintSession(); 
+      setMode('f');
+    } else {
+      errorDiv.textContent = '⚠ Celular o contraseña incorrectos.';
+      errorDiv.classList.remove('hidden');
+    }
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = 'Entrar →';
+  }
 }
 async function logout() {
   try { await fetch(apiURL('/auth/logout'), { method: 'POST', credentials: 'include' }); } catch {}
-  AT = null; paintSession(); toast('Sesión cerrada');
+  AT = null;
+  localStorage.removeItem('ga_active_store');
+  paintSession(); 
+  toast('Sesión cerrada');
 }
-function myStore() { return stores.find(s => s.id === storeId); }
+function myStore() { 
+  // Primero buscar en stores (API + demo)
+  let s = stores.find(s => s.id === storeId);
+  // Si no está en stores, buscar en localStorage demo
+  if (!s) {
+    try {
+      const demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]');
+      s = demoStores.find(ds => ds.id === storeId);
+    } catch {}
+  }
+  return s;
+}
+
 function paintSession() {
-  const on = !!AT;
+  // Verificar sesión: token JWT (AT) o demo store en localStorage
+  const demoSession = localStorage.getItem('ga_active_store');
+  const on = !!AT || !!demoSession;
+  
   $('#sesBar')?.classList.toggle('hidden', !on);
   $('#noSes')?.classList.toggle('hidden', on);
-  const s = myStore();
+  
+  let s = myStore();
+  // Si no hay store en memoria pero hay demo session
+  if (!s && demoSession) {
+    try { s = JSON.parse(demoSession); } catch {}
+  }
+  
   if (on && s) {
     $('#sesName').textContent = s.nombre;
     $('#sesHora').textContent = `${s.horario_txt || ''} · ${s.abierto_ahora ? '● Abierto ahora' : '● Cerrado ahora'}`;

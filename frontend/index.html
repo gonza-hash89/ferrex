@@ -248,7 +248,9 @@ tailwind.config = {
 <h3 class="font-black text-lg text-ferrex-text">🔐 Entrar como ferretería</h3>
 <input name="identifier" required inputmode="numeric" placeholder="Celular registrado (9XX XXX XXX)" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
 <input name="password" required type="password" placeholder="Contraseña" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
-<button class="w-full btn-primary py-2.5">Entrar →</button>
+<!-- Mensaje de error -->
+<div id="loginFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
+<button type="submit" class="w-full btn-primary py-2.5" id="loginSubmitBtn">Entrar →</button>
 <p class="text-xs text-ferrex-text-dim text-center">¿Sin cuenta? <button type="button" onclick="closeModal('loginModal');openModal('storeModal')" class="font-bold text-ferrex-neon hover:text-ferrex-neon-dim">Regístrala aquí</button></p>
 </form></div></div>
 
@@ -394,7 +396,7 @@ tailwind.config = {
 </div>
 
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-ferrex-card border border-ferrex-neon text-ferrex-text text-sm font-bold px-5 py-3 rounded-xl z-[60] shadow-neon"></div>
-<script src="/app.js"></script>
+<script src="/app.js?v=20261007"></script>
 <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{})); }</script>
 </body>
 </html>
