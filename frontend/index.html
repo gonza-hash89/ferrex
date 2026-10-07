@@ -285,7 +285,14 @@ tailwind.config = {
 </div>
 <label class="block text-xs font-semibold text-ferrex-text-dim">Logo / foto del local (JPG/PNG/WEBP, máx 5MB)<input type="file" name="logo" accept="image/jpeg,image/png,image/webp" class="block mt-1 text-xs"></label>
 <img id="logoPrev" alt="Vista previa del logo" class="hidden w-full h-32 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">
-<button class="w-full btn-primary py-2.5">Guardar ferretería ✅</button>
+<!-- Checkbox términos obligatorio -->
+<label class="flex items-start gap-2 text-xs cursor-pointer">
+  <input type="checkbox" name="aceptaTerminos" required class="w-4 h-4 mt-0.5 accent-ferrex-neon">
+  <span class="text-ferrex-text-dim">Acepto las <button type="button" onclick="openModal('privModal')" class="underline text-ferrex-neon hover:text-ferrex-neon-dim">Políticas de Privacidad</button> y <button type="button" onclick="openModal('termModal')" class="underline text-ferrex-neon hover:text-ferrex-neon-dim">Términos y Condiciones</button> *</span>
+</label>
+<!-- Mensaje de error -->
+<div id="storeFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
+<button type="submit" class="w-full btn-primary py-2.5" id="storeSubmitBtn">Guardar ferretería ✅</button>
 </form></div></div>
 
 <!-- MODAL PRODUCTO -->

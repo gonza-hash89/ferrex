@@ -202,13 +202,26 @@ async function loadStores() {
   let qs = '';
   if (loc && loc.mode === 'gps' && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) qs = `?lat=${loc.lat}&lng=${loc.lng}`;
   else if (loc && loc.mode === 'manual' && loc.distrito) qs = `?distrito=${encodeURIComponent(loc.distrito)}`;
-  stores = await api('/stores' + qs);
-  if (!stores.length) { toast(`Sin ferreterías en ${loc?.distrito || 'tu zona'} — mostrando todas`); stores = await api('/stores'); }
+  let apiStores = [];
+  try { apiStores = await api('/stores' + qs); } catch {}
+  // Incluir tiendas demo de localStorage
+  let demoStores = [];
+  try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
+  stores = [...apiStores, ...demoStores];
+  // Filtrar por distrito si hay ubicación manual
+  if (loc && loc.mode === 'manual' && loc.distrito) {
+    stores = stores.filter(s => s.distrito === loc.distrito);
+  }
+  if (!stores.length) { 
+    toast(`Sin ferreterías en ${loc?.distrito || 'tu zona'} — registra la tuya`); 
+    stores = [...apiStores, ...demoStores]; // mostrar todas si filtro no da resultados
+  }
   if (!stores.find(s => s.id === storeId)) { storeId = stores[0]?.id || 1; localStorage.setItem('ga_store', storeId); }
   $('#storeSel').innerHTML = stores.map(s => {
     const d = s.distance_km != null ? ` · a ${s.distance_km} km (~${s.eta_min} min)` : '';
     const st = s.abierto_ahora === false ? ' · 🔴 Cerrado' : '';
-    return `<option value="${s.id}" ${s.id === storeId ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito)}${d}${st}</option>`;
+    const demoBadge = demoStores.some(ds => ds.id === s.id) ? ' · 🧪 Demo' : '';
+    return `<option value="${s.id}" ${s.id === storeId ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito)}${d}${st}${demoBadge}</option>`;
   }).join('');
   paintSession();
   window._all = null; loadProducts();
@@ -317,17 +330,104 @@ function metaForStore(s) {
 }
 async function saveStore(e) {
   e.preventDefault();
-  const fd = new FormData(e.target);
-  fd.append('dias', JSON.stringify([...e.target.querySelectorAll('#regDias input:checked')].map(i => Number(i.value))));
+  const form = e.target;
+  const submitBtn = $('#storeSubmitBtn');
+  const errorDiv = $('#storeFormError');
+  
+  // Validación de campos requeridos
+  const fd = new FormData(form);
+  const nombre = fd.get('nombre')?.trim();
+  const distrito = fd.get('distrito')?.trim();
+  const password = fd.get('password');
+  const aceptaTerminos = fd.get('aceptaTerminos');
+  const dias = [...form.querySelectorAll('#regDias input:checked')].map(i => Number(i.value));
+  
+  if (!nombre || !distrito || !password || !aceptaTerminos) {
+    errorDiv.textContent = '⚠ Complete todos los campos obligatorios y acepte los términos.';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  if (password.length < 6) {
+    errorDiv.textContent = '⚠ La contraseña debe tener al menos 6 caracteres.';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  if (dias.length === 0) {
+    errorDiv.textContent = '⚠ Seleccione al menos un día de atención.';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  
+  // Estado de carga
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = 'Guardando... <span class="animate-spin">⏳</span>';
+  errorDiv.classList.add('hidden');
+  
+  fd.append('dias', JSON.stringify(dias));
+  
   try {
     const r = await fetch(apiURL('/stores'), { method: 'POST', body: fd, credentials: 'include' });
     const s = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(s.error || ('Error ' + r.status));
+    
+    // Éxito API
     if (s.accessToken) AT = s.accessToken;
-    toast('Ferretería creada y sesión iniciada ✅'); closeModal('storeModal'); e.target.reset(); $('#logoPrev').classList.add('hidden');
-    await loadStores(); storeId = s.id; localStorage.setItem('ga_store', s.id); $('#storeSel').value = s.id;
-    paintSession(); setMode('f'); loadProducts();
-  } catch (err) { toast(err.message); }
+    toast('¡Ferretería registrada correctamente! ✅');
+    closeModal('storeModal'); 
+    form.reset(); 
+    $('#logoPrev').classList.add('hidden');
+    $('#regDias').innerHTML = [1,2,3,4,5,6,0].map(d =>
+      `<label class="text-[11px] bg-ferrex-bg border border-ferrex-border rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="${d}" ${[1,2,3,4,5,6].includes(d) ? 'checked' : ''} class="accent-ferrex-neon"> ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d]}</label>`).join('');
+    await loadStores(); 
+    storeId = s.id; 
+    localStorage.setItem('ga_store', s.id); 
+    $('#storeSel').value = s.id;
+    paintSession(); 
+    setMode('f'); 
+    loadProducts();
+  } catch (err) {
+    // Fallback localStorage para modo demo
+    console.warn('API no disponible, guardando localmente:', err.message);
+    
+    const demoStore = {
+      id: Date.now(),
+      nombre,
+      distrito,
+      direccion: fd.get('direccion')?.trim() || '',
+      telefono: fd.get('telefono')?.trim() || '',
+      whatsapp: fd.get('whatsapp')?.trim() || '',
+      password, // en demo se guarda plano (solo demo)
+      apertura: fd.get('apertura') || '08:00',
+      cierre: fd.get('cierre') || '20:00',
+      dias,
+      logo: null,
+      abierto: true,
+      creado: new Date().toISOString()
+    };
+    
+    try {
+      const existing = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]');
+      existing.push(demoStore);
+      localStorage.setItem('ga_demo_stores', JSON.stringify(existing));
+    } catch {}
+    
+    toast('¡Ferretería registrada localmente (modo demo)! ✅');
+    closeModal('storeModal'); 
+    form.reset(); 
+    $('#logoPrev').classList.add('hidden');
+    $('#regDias').innerHTML = [1,2,3,4,5,6,0].map(d =>
+      `<label class="text-[11px] bg-ferrex-bg border border-ferrex-border rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="${d}" ${[1,2,3,4,5,6].includes(d) ? 'checked' : ''} class="accent-ferrex-neon"> ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d]}</label>`).join('');
+    await loadStores(); 
+    storeId = demoStore.id; 
+    localStorage.setItem('ga_store', demoStore.id); 
+    $('#storeSel').value = demoStore.id;
+    paintSession(); 
+    setMode('f'); 
+    loadProducts();
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = 'Guardar ferretería ✅';
+  }
 }
 
 /* ---------- catálogo ---------- */
