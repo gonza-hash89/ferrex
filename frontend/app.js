@@ -89,10 +89,17 @@ function unlockAudio() { try { if (!audioCtx) audioCtx = new (window.AudioContex
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
 async function api(path, opts = {}) {
-  const r = await fetch(apiURL(path), opts);
-  let j = null; try { j = await r.json(); } catch { throw new Error('Respuesta inválida del servidor'); }
-  if (!r.ok || j.ok === false) throw new Error(j.error || ('Error ' + r.status));
-  return j;
+  try {
+    const r = await fetch(apiURL(path), opts);
+    let j = null; 
+    try { j = await r.json(); } catch { throw new Error('Respuesta inválida del servidor'); }
+    if (!r.ok || j.ok === false) throw new Error(j.error || ('Error ' + r.status));
+    return { ok: true, data: j };
+  } catch (err) {
+    // Modo demo silencioso - no lanzar error, retornar flag
+    console.debug('API unavailable (demo mode):', err.message);
+    return { ok: false, error: err.message, demo: true };
+  }
 }
 function configAPI() {
   const cur = localStorage.getItem('ga_api') || '';
@@ -180,11 +187,16 @@ async function init() {
     } catch {}
   }
   
-  try {
-    const h = await api('/health');
+  const healthResult = await api('/health');
+  if (healthResult.ok) {
+    const h = healthResult.data;
     $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
-  } catch { $('#apiStat').innerHTML = '✕ API inalcanzable — <button onclick="configAPI()" class="underline">⚙️ configura el backend</button> o en local: npm start'; }
+  } else {
+    // Modo demo silencioso - sin error visible bloqueante
+    $('#apiStat').innerHTML = `○ Modo demo (offline) · <button onclick="configAPI()" class="underline">⚙️ configurar API</button>`;
+    $('#apiStat').className = 'text-center text-[11px] py-1 bg-ferrex-warning text-ferrex-bg';
+  }
   await loadStores(); await loadProducts();
   const before = JSON.stringify(getLoc());
   handleDeepLink(stores.map(s => s.distrito).filter(Boolean)); // 2da pasada con distritos de DB
@@ -226,7 +238,8 @@ async function loadStores() {
   if (loc && loc.mode === 'gps' && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) qs = `?lat=${loc.lat}&lng=${loc.lng}`;
   else if (loc && loc.mode === 'manual' && loc.distrito) qs = `?distrito=${encodeURIComponent(loc.distrito)}`;
   let apiStores = [];
-  try { apiStores = await api('/stores' + qs); } catch {}
+  const storesResult = await api('/stores' + qs);
+  if (storesResult.ok) apiStores = storesResult.data;
   // Incluir tiendas demo de localStorage
   let demoStores = [];
   try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
@@ -273,13 +286,17 @@ async function tryRefresh() {
 }
 async function apiAuth(path, method, body, retried) {
   try {
-    return await api(path, { method, headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body) });
+    const result = await api(path, { method, headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body) });
+    if (!result.ok) throw new Error(result.error || 'API error');
+    return result.data;
   } catch (e) {
     if (/sesi|401|Inicia sesión|vencida/i.test(e.message) && !retried) {
       if (await tryRefresh()) return apiAuth(path, method, body, true);
     }
     if (/sesi|401|Inicia sesión|vencida/i.test(e.message)) { AT = null; paintSession(); openModal('loginModal'); }
-    throw e;
+    // Modo demo silencioso
+    console.debug('API auth failed (demo mode):', e.message);
+    return { demo: true };
   }
 }
 async function login(e) {
@@ -542,7 +559,8 @@ async function saveStore(e) {
 async function loadProducts() {
   const q = $('#q').value || '';
   let apiProducts = [];
-  try { apiProducts = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`); } catch {}
+  const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`);
+  if (productsResult.ok) apiProducts = productsResult.data;
   
   // Cargar productos demo de localStorage
   let demoProducts = [];
@@ -561,7 +579,7 @@ async function loadProducts() {
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
       <button onclick="addCart(${p.id})" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
-    </div>`).join('') || '<p class="text-ferrex-text-muted col-span-3 text-center py-8">Sin productos. La ferretería puede subir fotos con “Agregar producto”.</p>';
+    </div>`).join('') || '<p class="text-ferrex-text-muted col-span-3 text-center py-8">Sin productos. La ferretería puede subir fotos con "Agregar producto".</p>';
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
@@ -574,13 +592,17 @@ function totals() {
   return { sub: s, n, ship, total: s + ship, del };
 }
 async function renderCart() {
-  if (!window._all) { try { window._all = await api(`/products?store_id=${storeId}`); } catch { window._all = products; } }
+  if (!window._all) { 
+    const allResult = await api(`/products?store_id=${storeId}`);
+    if (allResult.ok) window._all = allResult.data;
+    else window._all = products;
+  }
   const t = totals();
   $('#cartN').textContent = t.n;
   const all = [...products, ...(window._all || [])];
-  $('#cartBox').innerHTML = t.n === 0 ? '<p class="text-gray-400 text-center">Vacío</p>' :
+  $('#cartBox').innerHTML = t.n === 0 ? '<p class="text-ferrex-text-muted text-center">Vacío</p>' :
     Object.entries(cart).map(([id, q]) => { const p = all.find(x => x.id == id); if (!p) return '';
-      return `<div class="flex justify-between items-center bg-cemento rounded-xl p-2"><span><b>${q}×</b> ${esc(p.nombre)}</span><b class="text-etiqueta">${money(p.precio * q)}</b></div>`; }).join('');
+      return `<div class="flex justify-between items-center bg-ferrex-bg rounded-xl p-2"><span><b>${q}×</b> ${esc(p.nombre)}</span><b class="text-ferrex-neon">${money(p.precio * q)}</b></div>`; }).join('');
   $('#subT').textContent = money(t.sub);
   $('#shT').textContent = t.n === 0 ? '—' : (t.del ? `${money(SHIPPING_COST)}` : 'Gratis (recojo en tienda)');
   $('#toT').textContent = money(t.total);
@@ -588,64 +610,129 @@ async function renderCart() {
 
 /* ---------- 1. Checkout + WhatsApp ---------- */
 function currentStore() { return stores.find(s => s.id === storeId); }
+
+function buildWhatsAppMessage(t, store) {
+  const all = [...products, ...(window._all || [])];
+  const itemsText = Object.entries(cart).map(([id, q]) => {
+    const p = all.find(x => x.id == id);
+    return `• ${q}x ${p?.nombre || 'Producto'} - S/ ${(p?.precio || 0).toFixed(2)}`;
+  }).join('\n');
+  
+  const deliveryText = t.del 
+    ? `🚚 Delivery a: ${$('#addr').value.trim() || 'Dirección no especificada'}`
+    : `🏪 Recojo en tienda${$('#pickupName').value.trim() ? ` - Quien recoge: ${$('#pickupName').value.trim()}` : ''}`;
+  
+  const paymentText = `💳 Pago: ${pay}`;
+  const subtotal = t.sub;
+  const shipping = t.del ? SHIPPING_COST : 0;
+  
+  return `📋 *Nuevo Pedido FERREX*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n🚚 Envío: S/ ${shipping.toFixed(2)}\n*Total a pagar: S/ ${t.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
+}
+
+function normalizePhone(phone) {
+  if (!phone) return '';
+  // Limpiar: quitar espacios, guiones, paréntesis, +, etc.
+  let clean = phone.replace(/[\s\-\(\)\+]/g, '');
+  // Si no empieza con 51 (código Perú), agregarlo
+  if (!clean.startsWith('51')) {
+    // Si empieza con 9 (celular peruano de 9 dígitos), agregar 51
+    if (clean.startsWith('9') && clean.length === 9) {
+      clean = '51' + clean;
+    } else if (clean.length === 9) {
+      clean = '51' + clean;
+    }
+  }
+  return clean;
+}
+
 async function sendOrder() {
   const t = totals();
   if (t.n === 0) { toast('Carrito vacío 🛒'); return; }
   if (!$('#consent')?.checked) { toast('Aceptá las Políticas y Términos para confirmar ☑️'); $('#consent')?.focus(); return; }
-  const all = [...products, ...(window._all || [])];
-  const items = Object.entries(cart).map(([id, q]) => { const p = all.find(x => x.id == id); return { product_id: Number(id), nombre: p?.nombre || 'Producto', qty: q, price: p?.precio || 0 }; });
-  const body = {
-    store_id: storeId, items, total: t.total, pay,
-    address: $('#addr').value.trim(),
-    pickupName: $('#pickupName').value.trim(),
-    delivery: t.del ? 'delivery' : 'recojo',
-    clientZone: getLoc()
-  };
-  const btn = $('#sendBtn'); btn.disabled = true; btn.textContent = 'Confirmando…';
+  
+  // Obtener tienda actual (API + demo)
+  const store = stores.find(s => s.id === storeId) || 
+    JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').find(s => s.id === storeId);
+  
+  if (!store) {
+    toast('No hay ferretería seleccionada');
+    return;
+  }
+  
+  // Obtener teléfono de la tienda
+  const rawPhone = store.whatsapp || store.telefono || store.celular;
+  const phone = normalizePhone(rawPhone);
+  
+  if (!phone) {
+    toast('La ferretería no tiene teléfono/WhasApp configurado');
+    return;
+  }
+  
+  // Construir mensaje y URL de WhatsApp LOCALMENTE
+  const message = buildWhatsAppMessage(t, store);
+  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  
+  const btn = $('#sendBtn'); 
+  btn.disabled = true; 
+  btn.textContent = 'Abriendo WhatsApp…';
+  
   try {
-    const o = await api('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    cart = {}; renderCart();
-    // Mostrar bloque WhatsApp
+    // 1. Abrir WhatsApp INMEDIATAMENTE (frontend-first)
+    window.open(whatsappUrl, '_blank');
+    toast('Abriendo WhatsApp… 📲');
+    
+    // 2. Mostrar confirmación en UI
     $('#orderOk').classList.remove('hidden');
-    $('#okCode').textContent = `Pedido ${o.code}`;
-    const zl = o.clientZone && (o.clientZone.label || o.clientZone.distrito) ? ` · 📌 ${o.clientZone.label || o.clientZone.distrito}` : '';
-    const shipText = o.delivery === 'delivery' ? `Envío S/ ${SHIPPING_COST.toFixed(2)}` : 'Recojo en tienda (gratis)';
-    $('#okTxt').textContent = `${o.items.length} productos · ${shipText} · ${o.pay} · Subtotal ${money(o.total - (o.delivery === 'delivery' ? SHIPPING_COST : 0))} · Total ${money(o.total)}${zl}`;
+    $('#okCode').textContent = `Pedido FERREX-${Date.now().toString().slice(-6)}`;
+    $('#okTxt').textContent = `${t.n} productos · ${t.del ? 'Delivery' : 'Recojo'} · ${pay} · Total ${money(t.total)}`;
     const a = $('#waCta');
+    a.href = whatsappUrl;
+    a.classList.remove('hidden');
+    window._lastWa = message;
     
-    // Construir URL de WhatsApp - prioridad: API response > store local > demo store
-    let whatsappUrl = o.whatsapp_url;
-    let whatsappMsg = o.whatsapp_message;
+    // 3. Limpiar carrito
+    cart = {}; 
+    renderCart();
     
-    if (!whatsappUrl) {
-      // Buscar teléfono de la tienda
-      const store = stores.find(s => s.id === storeId) || 
-        JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').find(s => s.id === storeId);
-      const phone = store?.whatsapp || store?.telefono;
-      if (phone) {
-        const msg = whatsappMsg || buildOrderMessage(o, store);
-        whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-      }
-    }
+    // 4. Guardar en API EN BACKGROUND (no bloquea)
+    const body = {
+      store_id: storeId, 
+      items: Object.entries(cart).map(([id, q]) => { 
+        const p = all.find(x => x.id == id); 
+        return { product_id: Number(id), nombre: p?.nombre || 'Producto', qty: q, price: p?.precio || 0 }; 
+      }), 
+      total: t.total, pay,
+      address: $('#addr').value.trim(),
+      pickupName: $('#pickupName').value.trim(),
+      delivery: t.del ? 'delivery' : 'recojo',
+      clientZone: getLoc()
+    };
     
-    if (whatsappUrl) { 
-      a.href = whatsappUrl; 
-      a.classList.remove('hidden'); 
-      window.open(whatsappUrl, '_blank'); 
-    } else { 
-      a.classList.add('hidden'); 
-      toast('Pedido guardado, pero la tienda no tiene WhatsApp registrado'); 
-    }
-    window._lastWa = whatsappMsg || '';
-    toast(`Pedido ${o.code} en Pendiente 🎉`);
-  } catch (e) { toast(e.message); }
-  finally { btn.disabled = false; btn.textContent = 'Confirmar pedido por WhatsApp →'; }
+    // Fire-and-forget: intentar guardar en API, pero no bloquear
+    api('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(o => {
+        // Si API responde, actualizar código de pedido
+        $('#okCode').textContent = `Pedido ${o.code}`;
+        window._lastWa = o.whatsapp_message || message;
+      })
+      .catch(err => {
+        // Silencioso: modo demo
+        console.debug('API order save failed (demo mode):', err.message);
+      });
+    
+  } finally {
+    btn.disabled = false; 
+    btn.textContent = 'Confirmar pedido por WhatsApp →';
+  }
 }
 
-// Construir mensaje de pedido para WhatsApp
+// Función auxiliar para construir mensaje (compatibilidad con código anterior)
 function buildOrderMessage(order, store) {
   const itemsText = order.items.map(i => `• ${i.qty}x ${i.nombre} - S/ ${i.price.toFixed(2)}`).join('\n');
   const deliveryText = order.delivery === 'delivery' ? `🚚 Delivery a: ${order.address}` : `🏪 Recojo en tienda`;
+  const paymentText = `💳 Pago: ${order.pay}`;
+  return `📋 *Nuevo Pedido ${order.code}*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 *Total: S/ ${order.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
+}
   const paymentText = `💳 Pago: ${order.pay}`;
   return `📋 *Nuevo Pedido ${order.code}*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 *Total: S/ ${order.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
 }
