@@ -302,12 +302,18 @@ tailwind.config = {
 <div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="prodForm" class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-2" onsubmit="saveProduct(event)">
 <button type="button" onclick="closeModal('prodModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
 <h3 class="font-black text-lg text-ferrex-text">📦 Subir producto con foto</h3>
-<label class="block text-xs font-semibold text-ferrex-text-dim">Foto del producto* (JPG/PNG/WEBP, máx 5MB)<input type="file" name="foto" accept="image/jpeg,image/png,image/webp" required class="block mt-1 text-xs"></label>
+<label class="block text-xs font-semibold text-ferrex-text-dim">Foto del producto* (JPG/PNG/WEBP, máx 5MB)
+<input type="file" name="foto" accept="image/jpeg,image/png,image/webp" required class="block mt-1 text-xs" onchange="previewImage(this)">
+</label>
 <img id="fotoPrev" alt="Vista previa del producto" class="hidden w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">
 <input name="nombre" required maxlength="100" placeholder="Nombre: Cinta teflón Truper" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
-<div class="grid grid-cols-2 gap-2"><input name="precio" type="number" step="0.10" min="0.1" required placeholder="Precio S/" class="input-dark rounded-xl px-3 py-2 text-sm">
-<select name="categoria" class="input-dark rounded-xl px-3 py-2 text-sm"><option>Electricidad</option><option>Gasfitería</option><option>Fijaciones</option><option>Herramientas</option><option>Pinturas</option><option>Candados</option></select></div>
-<button class="w-full btn-primary py-2.5">Publicar ✅</button>
+<div class="grid grid-cols-2 gap-2">
+<input name="precio" type="number" step="0.10" min="0.1" required placeholder="Precio S/" class="input-dark rounded-xl px-3 py-2 text-sm">
+<select name="categoria" class="input-dark rounded-xl px-3 py-2 text-sm"><option>Electricidad</option><option>Gasfitería</option><option>Fijaciones</option><option>Herramientas</option><option>Pinturas</option><option>Candados</option></select>
+</div>
+<!-- Mensaje de error -->
+<div id="prodFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
+<button type="submit" class="w-full btn-primary py-2.5" id="prodSubmitBtn">Publicar ✅</button>
 </form></div></div>
 
 <!-- PIE DE PÁGINA -->

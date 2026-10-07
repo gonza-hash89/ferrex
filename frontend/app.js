@@ -72,6 +72,15 @@ function saveManualLoc() {
 function clearLoc() { setLoc(null); closeModal('locModal'); loadStores(); }
 const PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#eef1f4"/><text x="200" y="160" text-anchor="middle" font-size="60">🔩</text></svg>');
 function imgFallback(el) { el.onerror = null; el.src = PLACEHOLDER; }
+function previewImage(input) {
+  const file = input.files?.[0];
+  const preview = $('#fotoPrev');
+  if (!file) { preview.classList.add('hidden'); return; }
+  if (file.size > 5 * 1024 * 1024) { toast('Imagen > 5MB, elija otra'); input.value = ''; preview.classList.add('hidden'); return; }
+  const reader = new FileReader();
+  reader.onload = e => { preview.src = e.target.result; preview.classList.remove('hidden'); };
+  reader.readAsDataURL(file);
+}
 function absImg(u) { if (!u) return u; return u.startsWith('/') ? API_BASE + u : u; }
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.remove('hidden'); setTimeout(() => t.classList.add('hidden'), 2200); }
 function openModal(id) { $('#' + id).classList.remove('hidden'); }
@@ -532,17 +541,27 @@ async function saveStore(e) {
 /* ---------- catálogo ---------- */
 async function loadProducts() {
   const q = $('#q').value || '';
-  products = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`);
-  $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold border ${activeCat === c ? 'bg-plomo text-white' : 'bg-white'}">${c}</button>`).join('');
+  let apiProducts = [];
+  try { apiProducts = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`); } catch {}
+  
+  // Cargar productos demo de localStorage
+  let demoProducts = [];
+  try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+  const storeDemoProducts = demoProducts.filter(p => p.store_id === storeId);
+  
+  products = [...apiProducts, ...storeDemoProducts];
+  
+  $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold border ${activeCat === c ? 'bg-ferrex-card border-ferrex-neon text-ferrex-neon' : 'bg-ferrex-card border-ferrex-border'}">${c}</button>`).join('');
   $('#grid').innerHTML = products.filter(p => p.stock).map(p => `
-    <div class="bg-white rounded-2xl shadow p-3">
-      ${p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="${esc(p.nombre)}" class="w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
-        : `<div class="text-5xl text-center bg-cemento rounded-xl py-8">${p.emoji || '📦'}</div>`}
-      <p class="text-[11px] text-gray-400 font-bold mt-2">${esc(p.categoria)}</p>
-      <h3 class="font-extrabold text-sm leading-tight">${esc(p.nombre)}</h3>
+    <div class="product-card p-3">
+      ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="${esc(p.nombre)}" class="w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
+        : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="${esc(p.nombre)}" class="w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
+        : `<div class="text-5xl text-center bg-ferrex-bg rounded-xl py-8">${p.emoji || '📦'}</div>`}
+      <p class="text-[11px] text-ferrex-text-muted font-bold mt-2">${esc(p.categoria)}</p>
+      <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
-      <button onclick="addCart(${p.id})" class="w-full mt-2 bg-cinta text-plomo font-extrabold py-2 rounded-xl text-sm">Agregar al carrito</button>
-    </div>`).join('') || '<p class="text-gray-400 col-span-3 text-center py-8">Sin productos. La ferretería puede subir fotos con “Agregar producto”.</p>';
+      <button onclick="addCart(${p.id})" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
+    </div>`).join('') || '<p class="text-ferrex-text-muted col-span-3 text-center py-8">Sin productos. La ferretería puede subir fotos con “Agregar producto”.</p>';
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
@@ -606,17 +625,93 @@ function copyWa() { navigator.clipboard?.writeText(window._lastWa || '').then(()
 async function saveProduct(e) {
   e.preventDefault();
   if (!AT) { closeModal('prodModal'); needAuth(() => openModal('prodModal')); return; }
-  const fd = new FormData(e.target); fd.append('store_id', storeId);
+  
+  const form = e.target;
+  const fileInput = form.querySelector('[name=foto]');
+  const file = fileInput?.files?.[0];
+  
+  // Leer datos del formulario
+  const nombre = form.querySelector('[name=nombre]').value.trim();
+  const precio = parseFloat(form.querySelector('[name=precio]').value);
+  const categoria = form.querySelector('[name=categoria]').value;
+  
+  if (!nombre || isNaN(precio) || !categoria) {
+    toast('Complete todos los campos obligatorios');
+    return;
+  }
+  
+  // Convertir imagen a Base64 si existe
+  let fotoBase64 = null;
+  if (file) {
+    if (file.size > 5 * 1024 * 1024) {
+      toast('Imagen > 5MB, elija otra');
+      return;
+    }
+    try {
+      fotoBase64 = await fileToBase64(file);
+    } catch (err) {
+      toast('Error procesando imagen');
+      return;
+    }
+  }
+  
+  const submitBtn = form.querySelector('button[type=submit]');
+  const originalText = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = 'Publicando... <span class="animate-spin">⏳</span>';
+  
+  // Preparar objeto producto
+  const productData = {
+    id: Date.now(),
+    store_id: storeId,
+    nombre,
+    precio,
+    categoria,
+    foto_base64: fotoBase64,
+    stock: true,
+    creado: new Date().toISOString()
+  };
+  
   try {
+    // 1. Intentar API
+    const fd = new FormData(form);
+    fd.append('store_id', storeId);
     const r = await fetch(apiURL('/products'), { method: 'POST', headers: authHeaders(), body: fd });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
-    toast('Producto publicado ✅'); closeModal('prodModal'); e.target.reset(); $('#fotoPrev').classList.add('hidden');
-    window._all = null; loadProducts();
+    
+    // Éxito API
+    toast('Producto publicado ✅');
   } catch (err) {
-    if (/sesi|401|Inicia sesión|vencida/i.test(err.message)) { AT = null; paintSession(); openModal('loginModal'); }
-    toast(err.message);
+    // 2. Fallback localStorage para modo demo
+    console.warn('API no disponible, guardando localmente:', err.message);
+    
+    let demoProducts = [];
+    try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+    demoProducts.push(productData);
+    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    
+    toast('Producto publicado localmente (modo demo) ✅');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+    closeModal('prodModal');
+    form.reset();
+    $('#fotoPrev').classList.add('hidden');
+    $('#fotoPrev').src = '';
+    window._all = null;
+    loadProducts();
   }
+}
+
+// Helper: convertir File a Base64
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 async function toggleStock(id, val) {
   try { await apiAuth(`/products/${id}`, 'PATCH', { stock: val }); window._all = null; loadProducts(); }
@@ -633,10 +728,12 @@ async function delProduct(id) {
 function renderStock() {
   const list = window._all || products;
   $('#fStk').innerHTML = list.map(p => `<div class="flex items-center gap-3 p-3">
-    ${p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="Foto de ${esc(p.nombre)}" class="w-12 h-12 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">` : `<span class="text-2xl">${p.emoji || '📦'}</span>`}
-    <div class="flex-1"><b class="text-sm">${esc(p.nombre)}</b> <span class="price-tag text-xs">${money(p.precio)}</span></div>
-    <button onclick="toggleStock(${p.id},${!p.stock})" class="text-xs font-black px-3 py-2 rounded-full ${p.stock ? 'bg-listo text-plomoDark' : 'bg-etiqueta text-white'}">${p.stock ? 'HAY ✓' : 'SIN STOCK'}</button>
-    <button onclick="delProduct(${p.id})" class="text-xs px-2" aria-label="Eliminar">🗑️</button></div>`).join('');
+    ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="Foto de ${esc(p.nombre)}" class="w-12 h-12 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
+      : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="Foto de ${esc(p.nombre)}" class="w-12 h-12 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
+      : `<span class="text-2xl">${p.emoji || '📦'}</span>`}
+    <div class="flex-1"><b class="text-sm text-ferrex-text">${esc(p.nombre)}</b> <span class="price-tag text-xs">${money(p.precio)}</span></div>
+    <button onclick="toggleStock(${p.id},${!p.stock})" class="text-xs font-black px-3 py-2 rounded-full ${p.stock ? 'bg-listo text-plomoDark' : 'bg-ferrex-danger text-white'}">${p.stock ? 'HAY ✓' : 'SIN STOCK'}</button>
+    <button onclick="delProduct(${p.id})" class="text-xs px-2 text-ferrex-text-muted hover:text-ferrex-danger" aria-label="Eliminar">🗑️</button></div>`).join('');
 }
 
 /* ---------- 2. Tiempo real: SSE + polling + sonido ---------- */
