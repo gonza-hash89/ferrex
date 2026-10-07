@@ -42,7 +42,26 @@ try { fs.accessSync(UPLOAD_DIR, fs.constants.W_OK); }
 catch { console.error('[FATAL] /uploads no escribible:', UPLOAD_DIR); process.exit(1); }
 
 // ---- Pilar 5: helmet + CORS restringido + cookies ----
-app.use(helmet({ referrerPolicy: { policy: 'no-referrer' } }));
+// CSP permisivo para Tailwind CDN, Google Fonts, scripts/estilos inline
+app.use(helmet({
+  referrerPolicy: { policy: 'no-referrer' },
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      fontSrc: ["'self'", "https:", "data:"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+      scriptSrcAttr: ["'none'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "https://fonts.googleapis.com"],
+      upgradeInsecureRequests: []
+    }
+  }
+}));
 // Orígenes permitidos: lista explícita (CORS_ORIGIN) + origen de BASE_URL. Sin '*' + credenciales.
 const CORS_LIST = (process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean);
