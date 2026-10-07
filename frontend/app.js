@@ -605,23 +605,77 @@ async function sendOrder() {
   try {
     const o = await api('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     cart = {}; renderCart();
-    // Mostrar bloque WhatsApp con enlace generado por el backend (número real de la tienda)
+    // Mostrar bloque WhatsApp
     $('#orderOk').classList.remove('hidden');
     $('#okCode').textContent = `Pedido ${o.code}`;
     const zl = o.clientZone && (o.clientZone.label || o.clientZone.distrito) ? ` · 📌 ${o.clientZone.label || o.clientZone.distrito}` : '';
     const shipText = o.delivery === 'delivery' ? `Envío S/ ${SHIPPING_COST.toFixed(2)}` : 'Recojo en tienda (gratis)';
     $('#okTxt').textContent = `${o.items.length} productos · ${shipText} · ${o.pay} · Subtotal ${money(o.total - (o.delivery === 'delivery' ? SHIPPING_COST : 0))} · Total ${money(o.total)}${zl}`;
     const a = $('#waCta');
-    if (o.whatsapp_url) { a.href = o.whatsapp_url; a.classList.remove('hidden'); window.open(o.whatsapp_url, '_blank'); }
-    else { a.classList.add('hidden'); toast('Pedido guardado, pero la tienda no tiene WhatsApp registrado'); }
-    window._lastWa = o.whatsapp_message || '';
+    
+    // Construir URL de WhatsApp - prioridad: API response > store local > demo store
+    let whatsappUrl = o.whatsapp_url;
+    let whatsappMsg = o.whatsapp_message;
+    
+    if (!whatsappUrl) {
+      // Buscar teléfono de la tienda
+      const store = stores.find(s => s.id === storeId) || 
+        JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').find(s => s.id === storeId);
+      const phone = store?.whatsapp || store?.telefono;
+      if (phone) {
+        const msg = whatsappMsg || buildOrderMessage(o, store);
+        whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+      }
+    }
+    
+    if (whatsappUrl) { 
+      a.href = whatsappUrl; 
+      a.classList.remove('hidden'); 
+      window.open(whatsappUrl, '_blank'); 
+    } else { 
+      a.classList.add('hidden'); 
+      toast('Pedido guardado, pero la tienda no tiene WhatsApp registrado'); 
+    }
+    window._lastWa = whatsappMsg || '';
     toast(`Pedido ${o.code} en Pendiente 🎉`);
   } catch (e) { toast(e.message); }
   finally { btn.disabled = false; btn.textContent = 'Confirmar pedido por WhatsApp →'; }
 }
+
+// Construir mensaje de pedido para WhatsApp
+function buildOrderMessage(order, store) {
+  const itemsText = order.items.map(i => `• ${i.qty}x ${i.nombre} - S/ ${i.price.toFixed(2)}`).join('\n');
+  const deliveryText = order.delivery === 'delivery' ? `🚚 Delivery a: ${order.address}` : `🏪 Recojo en tienda`;
+  const paymentText = `💳 Pago: ${order.pay}`;
+  return `📋 *Nuevo Pedido ${order.code}*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 *Total: S/ ${order.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
+}
 function copyWa() { navigator.clipboard?.writeText(window._lastWa || '').then(() => toast('Mensaje copiado 📋')).catch(() => toast('No se pudo copiar')); }
 
 /* ---------- ferretería: stock ---------- */
+async function toggleStock(id, val) {
+  const newStock = val === true || val === 'true';
+  try {
+    // 1. Intentar API
+    await apiAuth(`/products/${id}`, 'PATCH', { stock: newStock });
+  } catch (err) {
+    // 2. Fallback localStorage demo
+    console.warn('API stock toggle falló, actualizando localStorage:', err.message);
+    let demoProducts = [];
+    try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+    const idx = demoProducts.findIndex(p => p.id === id);
+    if (idx >= 0) {
+      demoProducts[idx].stock = newStock;
+      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    }
+    // También actualizar en stores si está ahí
+    const storeIdx = products.findIndex(p => p.id === id);
+    if (storeIdx >= 0) products[storeIdx].stock = newStock;
+  }
+  window._all = null;
+  loadProducts();
+  toast(newStock ? 'Producto disponible ✅' : 'Producto agotado ❌');
+}
+
 async function saveProduct(e) {
   e.preventDefault();
   if (!AT) { closeModal('prodModal'); needAuth(() => openModal('prodModal')); return; }
