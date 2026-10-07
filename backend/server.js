@@ -42,7 +42,7 @@ try { fs.accessSync(UPLOAD_DIR, fs.constants.W_OK); }
 catch { console.error('[FATAL] /uploads no escribible:', UPLOAD_DIR); process.exit(1); }
 
 // ---- Pilar 5: helmet + CORS restringido + cookies ----
-// CSP permisivo para Tailwind CDN, Google Fonts, scripts/estilos inline
+// CSP permisivo para Tailwind CDN, Google Fonts, scripts/estilos inline, y event handlers
 app.use(helmet({
   referrerPolicy: { policy: 'no-referrer' },
   contentSecurityPolicy: {
@@ -56,7 +56,7 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:"],
       objectSrc: ["'none'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
-      scriptSrcAttr: ["'none'"],
+      scriptSrcAttr: ["'unsafe-inline'"], // Permite onclick, onchange, etc.
       styleSrc: ["'self'", "'unsafe-inline'", "https:", "https://fonts.googleapis.com"],
       upgradeInsecureRequests: []
     }
