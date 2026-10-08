@@ -572,9 +572,9 @@ async function loadProducts() {
   $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold border ${activeCat === c ? 'bg-ferrex-card border-ferrex-neon text-ferrex-neon' : 'bg-ferrex-card border-ferrex-border'}">${c}</button>`).join('');
   $('#grid').innerHTML = products.filter(p => p.stock).map(p => `
     <div class="product-card p-3">
-      ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="${esc(p.nombre)}" class="w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
-        : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="${esc(p.nombre)}" class="w-full h-40 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
-        : `<div class="text-5xl text-center bg-ferrex-bg rounded-xl py-8">${p.emoji || '📦'}</div>`}
+      ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
+        : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
+        : `<div class="product-emoji">${p.emoji || '📦'}</div>`}
       <p class="text-[11px] text-ferrex-text-muted font-bold mt-2">${esc(p.categoria)}</p>
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
