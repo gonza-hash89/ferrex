@@ -30,6 +30,39 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/assets/logo-ferrex.svg">
 <link rel="apple-touch-icon" href="/assets/logo-ferrex.svg">
+<link rel="sitemap" href="/sitemap.xml">
+<link rel="robots" href="/robots.txt">
+<!-- Analytics & Tracking (placeholders - replace with real IDs) -->
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
+<!-- Microsoft Clarity -->
+<script>
+  (function(c,l,a,r,i,t,y){
+    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+  })(window, document, "clarity", "script", "XXXXXXXXXX");
+</script>
+<!-- Meta Pixel -->
+<script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window,document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', 'XXXXXXXXXXXXXX');
+  fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=XXXXXXXXXXXXXX&ev=PageView&noscript=1"/></noscript>
 <script>window.__VITE_API_URL__ = "https://ferrex-vdex.onrender.com";</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -37,7 +70,6 @@ tailwind.config = {
   theme: {
     extend: {
       colors: {
-        // FERREX Dark Mode + Neon Green Palette
         'ferrex-bg': '#0B0F12',
         'ferrex-bg-alt': '#000000',
         'ferrex-card': '#161B22',
@@ -92,24 +124,31 @@ tailwind.config = {
   .input-dark:focus { outline: none; border-color: #17FF00; box-shadow: 0 0 0 3px rgba(23, 255, 0, 0.2); }
   .input-dark::placeholder { color: #6B7280; }
   
-  /* Cards productos */
+  /* Cards productos - nueva estructura limpia */
   .product-card { background: #161B22; border: 1px solid #2D3748; border-radius: 1rem; overflow: hidden; transition: all 0.3s ease; display: flex; flex-direction: column; }
   .product-card:hover { border-color: #17FF00; box-shadow: 0 0 30px rgba(23, 255, 0, 0.15); transform: translateY(-4px); }
-  
-  /* Imágenes y emojis en tarjetas de producto */
-  .product-card img, .product-emoji { 
+  .product-card img { 
     width: 100%; 
-    max-height: 140px; 
-    object-fit: contain; 
-    margin-bottom: 8px; 
+    height: 140px; 
+    object-fit: cover; 
     background: #0B0F12; 
   }
   .product-emoji { 
-    font-size: 4rem; 
-    text-align: center; 
-    padding: 1rem; 
-    line-height: 1; 
+    width: 100%; 
+    height: 140px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 3.5rem; 
+    background: #0B0F12; 
   }
+  .product-card .card-content { padding: 0.75rem; flex: 1; display: flex; flex-direction: column; }
+  .product-card .card-footer { padding: 0.75rem; border-top: 1px solid #2D3748; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  
+  /* Categorías - pills horizontales */
+  .cat-pill { white-space: nowrap; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; border: 1px solid; transition: all 0.2s; }
+  .cat-pill.active { background: #17FF00; color: #0B0F12; border-color: #17FF00; }
+  .cat-pill.inactive { background: #161B22; color: #A0AEC0; border-color: #2D3748; }
   
   /* Radio buttons custom */
   .radio-option { border: 2px solid #2D3748; background: #161B22; transition: all 0.2s ease; }
@@ -130,7 +169,7 @@ tailwind.config = {
   ::-webkit-scrollbar-thumb { background: #2D3748; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: #17FF00; }
   
-  /* Cookie banner - fix bottom padding */
+  /* Cookie banner - fix bottom padding con safe-area */
   #cookieBar { 
     padding-bottom: max(12px, env(safe-area-inset-bottom)); 
     bottom: 0; 
@@ -138,6 +177,34 @@ tailwind.config = {
   #cookieBar > div { 
     padding-bottom: max(8px, env(safe-area-inset-bottom)); 
   }
+  
+  /* Inventory modal styles */
+  .inv-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .inv-row > * { flex: 1; }
+  .inv-product-row { background: #1C252E; border: 1px solid #2D3748; border-radius: 0.75rem; padding: 0.75rem; margin-bottom: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .inv-product-header { display: flex; justify-content: space-between; align-items: center; }
+  .inv-product-fields { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+  .inv-product-fields .full-width { grid-column: span 2; }
+  .stock-badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 800; }
+  .stock-badge.in-stock { background: #17FF00; color: #0B0F12; }
+  .stock-badge.out-stock { background: #FF4444; color: #FFFFFF; }
+  
+  /* Toast mejorado */
+  #toast { 
+    transform: translateX(-50%) translateY(100px); 
+    opacity: 0; 
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  }
+  #toast.show { 
+    transform: translateX(-50%) translateY(0); 
+    opacity: 1; 
+  }
+  
+  /* Modal improvements */
+  .modal-content { max-height: 85vh; overflow-y: auto; }
+  
+  /* Loading skeleton */
+  .skeleton { background: linear-gradient(90deg, #1C252E 25%, #2D3748 50%, #1C252E 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 0.5rem; }
 </style>
 </head>
 <body class="bg-ferrex-bg text-ferrex-text font-inter antialiased">
@@ -145,7 +212,7 @@ tailwind.config = {
 <header class="bg-ferrex-bg-alt/95 backdrop-blur-sm border-b border-ferrex-border sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
     <a href="/" class="flex items-center gap-3" aria-label="FERREX - Inicio">
-      <img src="/assets/logo-ferrex.svg" alt="FERREX" class="w-10 h-10" width="40" height="40">
+      <img src="/assets/logo-ferrex.svg" alt="FERREX" class="w-10 h-10" width="40" height="40" loading="lazy">
       <div class="hidden sm:block">
         <span class="font-black text-lg leading-tight tracking-tight">FERREX</span>
         <p class="text-[10px] font-medium text-ferrex-neon uppercase tracking-widest leading-none">TU PROYECTO, NUESTRA FUERZA</p>
@@ -171,34 +238,58 @@ tailwind.config = {
 <!-- CLIENTE -->
 <div id="vCli" tabindex="-1" class="view active max-w-7xl mx-auto px-4 py-5 grid lg:grid-cols-[1fr_330px] gap-5 items-start">
   <div>
-    <div id="cats" class="flex gap-2 overflow-x-auto no-scrollbar pb-2"></div>
+    <!-- Buscador y categorías -->
+    <div class="mb-4">
+      <input id="q" oninput="loadProducts()" placeholder="Buscar: teflón, foco, tornillos…" aria-label="Buscar productos" class="input-dark w-full rounded-xl px-4 py-3 text-base bg-ferrex-card border-ferrex-border mb-3" style="font-size: 16px;">
+      <div id="cats" class="flex gap-2 overflow-x-auto no-scrollbar pb-2"></div>
+    </div>
     <div id="grid" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-3"></div>
   </div>
-  <aside class="bg-ferrex-card border border-ferrex-border rounded-2xl shadow-2xl p-5 lg:sticky lg:top-24">
-    <h3 class="font-extrabold text-ferrex-text flex items-center gap-2"><span class="text-ferrex-neon">🧾</span> Tu pedido</h3>
-    <button onclick="openLoc()" class="w-full mt-1 text-left text-xs bg-ferrex-bg rounded-xl px-3 py-2 border border-ferrex-border hover:border-ferrex-neon transition-colors">📍 <span id="zoneLbl" class="text-ferrex-text-dim">Sin zona — toca para elegir</span></button>
-    <div id="cartBox" class="text-sm mt-2 space-y-2"></div>
-    <div class="text-sm mt-3 border-t border-ferrex-border pt-2"><div class="flex justify-between"><span class="text-ferrex-text-dim">Subtotal</span><b id="subT" class="text-ferrex-text">S/ 0.00</b></div>
-    <div class="flex justify-between"><span class="text-ferrex-text-dim">Envío a domicilio</span><b id="shT" class="text-ferrex-neon">S/ 5.00</b></div>
-    <div class="flex justify-between text-lg"><b class="text-ferrex-text">Total a pagar</b><b id="toT" class="text-ferrex-neon text-xl">S/ 0.00</b></div></div>
-    <div class="flex gap-2 mt-2 text-sm">
-      <label class="radio-option flex-1 rounded-xl p-2 cursor-pointer"><input type="radio" name="del" value="delivery" checked onchange="renderCart()" class="sr-only"> <span class="font-medium">🛵 Delivery</span></label>
-      <label class="radio-option flex-1 rounded-xl p-2 cursor-pointer"><input type="radio" name="del" value="recojo" onchange="renderCart()" class="sr-only"> <span class="font-medium">🏃 Recojo</span></label>
+  <aside class="bg-ferrex-card border border-ferrex-border rounded-2xl shadow-2xl p-4 lg:sticky lg:top-24">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-extrabold text-ferrex-text flex items-center gap-2"><span class="text-ferrex-neon">🧾</span> Tu pedido</h3>
+      <span id="cartN" class="bg-ferrex-neon text-ferrex-bg text-xs font-black px-2 py-0.5 rounded-full">0</span>
     </div>
-    <label class="block text-xs font-semibold text-ferrex-text-dim mt-2">Dirección de entrega
+    
+    <button onclick="openLoc()" class="w-full mb-3 text-left text-xs bg-ferrex-bg rounded-xl px-3 py-2 border border-ferrex-border hover:border-ferrex-neon transition-colors flex items-center justify-between">
+      <span>📍 <span id="zoneLbl" class="text-ferrex-text-dim">Sin zona — toca para elegir</span></span>
+      <span class="text-ferrex-text-muted">📍</span>
+    </button>
+    
+    <div id="cartBox" class="space-y-2 mb-4 max-h-64 overflow-y-auto"></div>
+    
+    <div class="border-t border-ferrex-border pt-3 mb-3">
+      <div class="flex justify-between text-sm mb-1"><span class="text-ferrex-text-dim">Subtotal</span><b id="subT" class="text-ferrex-text">S/ 0.00</b></div>
+      <div class="flex justify-between text-sm mb-1"><span class="text-ferrex-text-dim">Envío a domicilio</span><b id="shT" class="text-ferrex-neon">S/ 5.00</b></div>
+      <div class="flex justify-between text-lg font-black"><span class="text-ferrex-text">Total a pagar</span><b id="toT" class="text-ferrex-neon">S/ 0.00</b></div>
+    </div>
+    
+    <div class="flex gap-2 mb-3">
+      <label class="radio-option flex-1 rounded-xl p-2 cursor-pointer text-center"><input type="radio" name="del" value="delivery" checked onchange="renderCart()" class="sr-only"> <span class="font-medium">🛵 Delivery</span></label>
+      <label class="radio-option flex-1 rounded-xl p-2 cursor-pointer text-center"><input type="radio" name="del" value="recojo" onchange="renderCart()" class="sr-only"> <span class="font-medium">🏃 Recojo</span></label>
+    </div>
+    
+    <label class="block text-xs font-semibold text-ferrex-text-dim mb-2">Dirección de entrega
       <input id="addr" value="Jr. Lima 240, Chosica" placeholder="Jr. Lima 240, Chosica" class="input-dark w-full rounded-xl px-3 py-2 text-sm mt-1 font-normal">
     </label>
-    <label class="block text-xs font-semibold text-ferrex-text-dim mt-2">¿Quién recoge? <span class="font-normal text-ferrex-text-muted">(solo recojo)</span>
+    <label class="block text-xs font-semibold text-ferrex-text-dim mb-3">¿Quién recoge? <span class="font-normal text-ferrex-text-muted">(solo recojo)</span>
       <input id="pickupName" placeholder="Ej. Juan Pérez" class="input-dark w-full rounded-xl px-3 py-2 text-sm mt-1 font-normal">
     </label>
-    <div class="grid grid-cols-3 gap-2 mt-2 text-xs font-bold">
-      <button onclick="setPay('Efectivo')" class="pay btn-secondary rounded-xl py-2">Efectivo</button>
-      <button onclick="setPay('Yape')" class="pay btn-secondary rounded-xl py-2">Yape</button>
-      <button onclick="setPay('Plin')" class="pay btn-secondary rounded-xl py-2">Plin</button>
+    
+    <div class="grid grid-cols-3 gap-2 mb-3">
+      <button onclick="setPay('Efectivo')" class="pay btn-secondary rounded-xl py-2 text-xs">Efectivo</button>
+      <button onclick="setPay('Yape')" class="pay btn-secondary rounded-xl py-2 text-xs">Yape</button>
+      <button onclick="setPay('Plin')" class="pay btn-secondary rounded-xl py-2 text-xs">Plin</button>
     </div>
-    <button onclick="sendOrder()" id="sendBtn" class="w-full btn-primary py-3 rounded-xl mt-3 text-base">Confirmar pedido por WhatsApp →</button>
-    <label class="flex items-start gap-2 mt-2 text-xs cursor-pointer"><input id="consent" type="checkbox" class="w-5 h-5 mt-0.5 accent-ferrex-neon"> <span class="text-ferrex-text-dim">Acepto las <button type="button" onclick="openModal('privModal')" class="underline font-semibold text-ferrex-neon hover:text-ferrex-neon-dim">Políticas de Privacidad</button> y <button type="button" onclick="openModal('termModal')" class="underline font-semibold text-ferrex-neon hover:text-ferrex-neon-dim">Términos de Compra</button>*</span></label>
-    <!-- Confirmación + WhatsApp (capa 1) -->
+    
+    <button onclick="sendOrder()" id="sendBtn" class="w-full btn-primary py-3 rounded-xl text-base font-bold">Confirmar pedido por WhatsApp →</button>
+    
+    <label class="flex items-start gap-2 mt-3 text-xs cursor-pointer">
+      <input id="consent" type="checkbox" class="w-5 h-5 mt-0.5 accent-ferrex-neon" required>
+      <span class="text-ferrex-text-dim">Acepto las <button type="button" onclick="openModal('privModal')" class="underline font-semibold text-ferrex-neon hover:text-ferrex-neon-dim">Políticas de Privacidad</button> y <button type="button" onclick="openModal('termModal')" class="underline font-semibold text-ferrex-neon hover:text-ferrex-neon-dim">Términos de Compra</button>*</span>
+    </label>
+    
+    <!-- Confirmación + WhatsApp -->
     <div id="orderOk" class="hidden mt-3 bg-ferrex-neon/10 border-2 border-ferrex-neon rounded-2xl p-3 text-sm">
       <p class="font-black text-ferrex-neon">✅ <span id="okCode"></span> registrado (Pendiente)</p>
       <p id="okTxt" class="text-xs text-ferrex-text-dim mt-1"></p>
@@ -211,21 +302,22 @@ tailwind.config = {
 
 <!-- FERRETERIA -->
 <div id="vFer" class="view max-w-7xl mx-auto px-4 py-5">
-  <div id="sesBar" class="hidden mb-3 bg-ferrex-card border border-ferrex-border rounded-2xl p-3 flex items-center gap-2 text-sm">
+  <div id="sesBar" class="hidden mb-4 bg-ferrex-card border border-ferrex-border rounded-2xl p-3 flex items-center gap-2 text-sm">
     <span class="text-ferrex-neon">🏪</span> <b id="sesName" class="text-ferrex-text"></b> · <span id="sesHora" class="text-ferrex-text-dim"></span>
     <span class="flex-1"></span>
     <button onclick="logout()" class="text-xs font-bold btn-secondary px-3 py-1.5 rounded-xl">Salir</button>
   </div>
-  <div id="noSes" class="mb-3 bg-ferrex-neon/10 border-2 border-ferrex-neon rounded-2xl p-3 text-sm">
+  <div id="noSes" class="mb-4 bg-ferrex-neon/10 border-2 border-ferrex-neon rounded-2xl p-3 text-sm">
     🔒 <b class="text-ferrex-text">Gestiona tu ferretería:</b> <button onclick="openModal('loginModal')" class="font-bold underline text-ferrex-neon hover:text-ferrex-neon-dim">inicia sesión</button> para publicar, cambiar stock y tu horario.
   </div>
-  <div class="flex gap-2 flex-wrap items-center">
+  <div class="flex gap-2 flex-wrap items-center mb-4">
     <button onclick="ftab('ped')" class="btn-secondary font-bold px-4 py-2 rounded-xl text-sm">🧾 Pedidos</button>
-    <button onclick="ftab('stk')" class="btn-secondary font-bold px-4 py-2 rounded-xl text-sm">📦 Productos / Stock</button>
-    <button onclick="needAuth(()=>openModal('prodModal'))" class="btn-primary px-4 py-2 rounded-xl text-sm">➕ Agregar producto con foto</button>
+    <button onclick="ftab('stk')" class="btn-secondary font-bold px-4 py-2 rounded-xl text-sm">📦 Stock</button>
+    <button onclick="ftab('inv')" class="btn-primary font-bold px-4 py-2 rounded-xl text-sm">📋 Inventario</button>
     <span id="ssePill" class="text-[11px] font-bold px-3 py-1.5 rounded-full bg-ferrex-card border border-ferrex-border">● conectando…</span>
     <button id="sndBtn" onclick="toggleSound()" class="text-[11px] font-bold px-3 py-1.5 rounded-full btn-secondary">🔔 Sonido ON</button>
   </div>
+  
   <!-- Mi horario -->
   <div class="bg-ferrex-card border border-ferrex-border rounded-2xl shadow-xl p-4 mt-3 max-w-2xl">
     <h3 class="font-extrabold text-sm text-ferrex-text">🕐 Mi horario de atención <span id="myState" class="text-xs font-bold px-2 py-0.5 rounded-full bg-ferrex-card border border-ferrex-border"></span></h3>
@@ -241,6 +333,7 @@ tailwind.config = {
   <p class="text-xs text-ferrex-text-muted mt-2">Los pedidos <b class="text-ferrex-warning">Pendientes</b> suenan y parpadean en verde neón. Flujo: Pendiente → Aceptado → En Camino / Listo para recojo → Completado.</p>
   <div id="fPed" class="grid md:grid-cols-2 gap-3 mt-3"></div>
   <div id="fStk" class="hidden bg-ferrex-card border border-ferrex-border rounded-2xl shadow-xl divide-y divide-ferrex-border mt-4"></div>
+  <div id="fInv" class="hidden mt-4"></div>
 </div>
 
 <!-- MODAL UBICACIÓN HÍBRIDA -->
@@ -339,6 +432,51 @@ tailwind.config = {
 <div id="prodFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
 <button type="submit" class="w-full btn-primary py-2.5" id="prodSubmitBtn">Publicar ✅</button>
 </form></div></div>
+
+<!-- MODAL INVENTARIO (Gestión completa de productos) -->
+<div id="invModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('invModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-2xl modal-content" onsubmit="saveInventory(event)">
+<button type="button" onclick="closeModal('invModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
+<h3 class="font-black text-lg text-ferrex-text mb-4">📋 Gestión de Inventario</h3>
+
+<!-- Formulario nuevo producto -->
+<div class="bg-ferrex-bg rounded-xl p-4 mb-4 border border-ferrex-border">
+  <h4 class="font-bold text-ferrex-text mb-3">➕ Nuevo Producto</h4>
+  <form id="newProductForm" class="space-y-3" onsubmit="addInventoryProduct(event)">
+    <div class="inv-row">
+      <input name="codigo" placeholder="Código (ej: SKU-001)" class="input-dark rounded-xl px-3 py-2 text-sm" required>
+      <input name="nombre" placeholder="Nombre del producto" class="input-dark rounded-xl px-3 py-2 text-sm" required>
+    </div>
+    <div class="inv-row">
+      <input name="precio" type="number" step="0.10" min="0.1" placeholder="Precio S/" class="input-dark rounded-xl px-3 py-2 text-sm" required>
+      <select name="categoria" class="input-dark rounded-xl px-3 py-2 text-sm" required>
+        <option value="">Categoría</option>
+        <option>Electricidad</option><option>Gasfitería</option><option>Fijaciones</option>
+        <option>Herramientas</option><option>Pinturas</option><option>Candados</option>
+        <option>Plomería</option><option>Cerrajería</option><option>Otros</option>
+      </select>
+    </div>
+    <div class="inv-row">
+      <input name="stock" type="number" min="0" placeholder="Stock inicial" class="input-dark rounded-xl px-3 py-2 text-sm" value="0">
+      <input name="precioOferta" type="number" step="0.10" min="0" placeholder="Precio oferta S/ (opcional)" class="input-dark rounded-xl px-3 py-2 text-sm">
+    </div>
+    <label class="block text-xs font-semibold text-ferrex-text-dim">Foto del producto (JPG/PNG/WEBP, máx 5MB)
+      <input type="file" name="foto" accept="image/jpeg,image/png,image/webp" class="block mt-1 text-xs" onchange="previewImage(this)">
+    </label>
+    <img id="invFotoPrev" alt="Vista previa" class="hidden w-full h-32 object-cover rounded-xl mt-1" loading="lazy" onerror="imgFallback(this)">
+    <div id="invFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
+    <button type="submit" class="w-full btn-primary py-2.5">Agregar al inventario ✅</button>
+  </form>
+</div>
+
+<!-- Lista de productos existentes -->
+<div class="max-h-96 overflow-y-auto">
+  <h4 class="font-bold text-ferrex-text mb-3">📦 Productos en inventario</h4>
+  <div id="invList" class="space-y-2">
+    <p class="text-ferrex-text-dim text-center py-4">Cargando inventario…</p>
+  </div>
+</div>
+</div></div></div>
 
 <!-- PIE DE PÁGINA -->
 <footer class="bg-ferrex-bg-alt border-t border-ferrex-border text-ferrex-text mt-8">

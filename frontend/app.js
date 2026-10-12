@@ -82,7 +82,7 @@ function previewImage(input) {
   reader.readAsDataURL(file);
 }
 function absImg(u) { if (!u) return u; return u.startsWith('/') ? API_BASE + u : u; }
-function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.remove('hidden'); setTimeout(() => t.classList.add('hidden'), 2200); }
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.classList.add('hidden'), 300); }, 2200); }
 function openModal(id) { $('#' + id).classList.remove('hidden'); }
 function closeModal(id) { $('#' + id).classList.add('hidden'); }
 function unlockAudio() { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {} }
@@ -224,7 +224,10 @@ function setMode(m) {
 function ftab(t) {
   $('#fPed').classList.toggle('hidden', t !== 'ped');
   $('#fStk').classList.toggle('hidden', t !== 'stk');
-  if (t === 'ped') loadOrders(); if (t === 'stk') renderStock();
+  $('#fInv').classList.toggle('hidden', t !== 'inv');
+  if (t === 'ped') loadOrders(); 
+  if (t === 'stk') renderStock();
+  if (t === 'inv') loadInventory();
 }
 function setPay(p) {
   pay = p;
@@ -569,7 +572,7 @@ async function loadProducts() {
   
   products = [...apiProducts, ...storeDemoProducts];
   
-  $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold border ${activeCat === c ? 'bg-ferrex-card border-ferrex-neon text-ferrex-neon' : 'bg-ferrex-card border-ferrex-border'}">${c}</button>`).join('');
+  $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="cat-pill ${activeCat === c ? 'active' : 'inactive'}">${c}</button>`).join('');
   $('#grid').innerHTML = products.filter(p => p.stock).map(p => `
     <div class="product-card p-3">
       ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
@@ -872,6 +875,195 @@ function renderStock() {
     <div class="flex-1"><b class="text-sm text-ferrex-text">${esc(p.nombre)}</b> <span class="price-tag text-xs">${money(p.precio)}</span></div>
     <button onclick="toggleStock(${p.id},${!p.stock})" class="text-xs font-black px-3 py-2 rounded-full ${p.stock ? 'bg-listo text-plomoDark' : 'bg-ferrex-danger text-white'}">${p.stock ? 'HAY ✓' : 'SIN STOCK'}</button>
     <button onclick="delProduct(${p.id})" class="text-xs px-2 text-ferrex-text-muted hover:text-ferrex-danger" aria-label="Eliminar">🗑️</button></div>`).join('');
+}
+
+/* ---------- INVENTARIO MANAGEMENT ---------- */
+async function loadInventory() {
+  if (!AT) { needAuth(() => openModal('invModal')); return; }
+  $('#invList').innerHTML = '<p class="text-ferrex-text-dim text-center py-4">Cargando inventario…</p>';
+  
+  let demoProducts = [];
+  try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+  const storeProducts = demoProducts.filter(p => p.store_id === storeId);
+  
+  const apiResult = await api(`/products?store_id=${storeId}`);
+  let apiProducts = [];
+  if (apiResult.ok) apiProducts = apiResult.data;
+  
+  const allProducts = [...apiProducts, ...storeProducts];
+  
+  if (!allProducts.length) {
+    $('#invList').innerHTML = '<p class="text-ferrex-text-dim text-center py-8">No hay productos. Agrega tu primer producto.</p>';
+    return;
+  }
+  
+  $('#invList').innerHTML = allProducts.map(p => `
+    <div class="inv-product-row" data-id="${p.id}">
+      <div class="inv-product-header">
+        <div>
+          <span class="font-bold text-ferrex-text">${esc(p.nombre)}</span>
+          <span class="text-xs text-ferrex-text-dim ml-2">${esc(p.categoria)}</span>
+          ${p.codigo ? `<span class="text-xs text-ferrex-text-dim ml-2">SKU: ${esc(p.codigo)}</span>` : ''}
+        </div>
+        <span class="stock-badge ${p.stock ? 'in-stock' : 'out-stock'}">${p.stock ? 'HAY' : 'SIN STOCK'}</span>
+      </div>
+      <div class="inv-product-fields">
+        <div>
+          <label class="text-xs text-ferrex-text-dim">Precio S/</label>
+          <input type="number" step="0.10" min="0.1" value="${p.precio}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'precio', this.value)">
+        </div>
+        <div>
+          <label class="text-xs text-ferrex-text-dim">Stock</label>
+          <input type="number" min="0" value="${p.stock_qty || p.stock_count || 0}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'stock_qty', this.value)">
+        </div>
+        <div class="full-width">
+          <label class="text-xs text-ferrex-text-dim">Precio Oferta S/</label>
+          <input type="number" step="0.10" min="0" value="${p.precioOferta || ''}" placeholder="Opcional" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'precioOferta', this.value)">
+        </div>
+        <div class="full-width">
+          <label class="text-xs text-ferrex-text-dim">Código / SKU</label>
+          <input type="text" value="${p.codigo || ''}" placeholder="SKU-001" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'codigo', this.value)">
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="toggleInventoryStock(${p.id}, ${!p.stock})" class="flex-1 btn-secondary py-2 text-sm">${p.stock ? 'Marcar Sin Stock' : 'Marcar Disponible'}</button>
+        <button onclick="editInventoryProduct(${p.id})" class="btn-outline py-2 text-sm">Editar</button>
+        <button onclick="deleteInventoryProduct(${p.id})" class="btn-secondary py-2 text-sm bg-ferrex-danger border-ferrex-danger">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+/* Funciones de inventario */
+async function addInventoryProduct(e) {
+  e.preventDefault();
+  if (!AT) { needAuth(() => openModal('invModal')); return; }
+  
+  const form = e.target;
+  const fileInput = form.querySelector('[name=foto]');
+  const file = fileInput?.files?.[0];
+  
+  const codigo = form.querySelector('[name=codigo]').value.trim();
+  const nombre = form.querySelector('[name=nombre]').value.trim();
+  const precio = parseFloat(form.querySelector('[name=precio]').value);
+  const categoria = form.querySelector('[name=categoria]').value;
+  const stock = parseInt(form.querySelector('[name=stock]').value) || 0;
+  const precioOferta = parseFloat(form.querySelector('[name=precioOferta]').value) || null;
+  
+  if (!codigo || !nombre || isNaN(precio) || !categoria) {
+    $('#invFormError').textContent = 'Complete todos los campos obligatorios';
+    $('#invFormError').classList.remove('hidden');
+    return;
+  }
+  
+  let fotoBase64 = null;
+  if (file) {
+    if (file.size > 5 * 1024 * 1024) { toast('Imagen > 5MB, elija otra'); return; }
+    try { fotoBase64 = await fileToBase64(file); } catch { toast('Error procesando imagen'); return; }
+  }
+  
+  const submitBtn = form.querySelector('button[type=submit]');
+  const originalText = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = 'Guardando... <span class="animate-spin">⏳</span>';
+  $('#invFormError').classList.add('hidden');
+  
+  const productData = {
+    id: Date.now(),
+    store_id: storeId,
+    codigo,
+    nombre,
+    precio,
+    categoria,
+    stock: true,
+    stock_qty: stock,
+    precioOferta,
+    foto_base64: fotoBase64,
+    creado: new Date().toISOString()
+  };
+  
+  try {
+    const fd = new FormData(form);
+    fd.append('store_id', storeId);
+    const r = await fetch(apiURL('/products'), { method: 'POST', headers: authHeaders(), body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+    toast('Producto agregado ✅');
+  } catch (err) {
+    console.warn('API no disponible, guardando localmente:', err.message);
+    let demoProducts = [];
+    try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+    demoProducts.push(productData);
+    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    toast('Producto agregado localmente (modo demo) ✅');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+    form.reset();
+    $('#invFotoPrev').classList.add('hidden');
+    $('#invFotoPrev').src = '';
+    loadInventory();
+  }
+}
+
+async function updateInventoryField(id, field, value) {
+  if (!AT) return;
+  try {
+    await apiAuth(`/products/${id}`, 'PATCH', { [field]: value });
+    // Actualizar localStorage demo también
+    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
+    const idx = demoProducts.findIndex(p => p.id === id);
+    if (idx >= 0) {
+      demoProducts[idx][field] = value;
+      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    }
+    toast('Actualizado ✅');
+  } catch (err) {
+    // Fallback localStorage
+    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
+    const idx = demoProducts.findIndex(p => p.id === id);
+    if (idx >= 0) {
+      demoProducts[idx][field] = value;
+      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+      toast('Actualizado localmente ✅');
+    }
+  }
+}
+
+async function toggleInventoryStock(id, newStock) {
+  if (!AT) return;
+  try {
+    await apiAuth(`/products/${id}`, 'PATCH', { stock: newStock });
+  } catch (err) {
+    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
+    const idx = demoProducts.findIndex(p => p.id === id);
+    if (idx >= 0) {
+      demoProducts[idx].stock = newStock;
+      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    }
+  }
+  loadInventory();
+  toast(newStock ? 'Producto disponible ✅' : 'Producto sin stock ❌');
+}
+
+async function editInventoryProduct(id) {
+  // El formulario ya permite editar inline, solo dar feedback
+  toast('Edita los campos y se guardan automáticamente ✅');
+}
+
+async function deleteInventoryProduct(id) {
+  if (!confirm('¿Eliminar este producto permanentemente?')) return;
+  if (!AT) return;
+  try {
+    await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
+    toast('Producto eliminado ✅');
+  } catch (err) {
+    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
+    demoProducts = demoProducts.filter(p => p.id !== id);
+    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    toast('Producto eliminado localmente ✅');
+  }
+  loadInventory();
+  loadProducts();
 }
 
 /* ---------- 2. Tiempo real: SSE + polling + sonido ---------- */
