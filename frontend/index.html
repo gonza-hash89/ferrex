@@ -337,22 +337,23 @@ tailwind.config = {
 </div>
 
 <!-- MODAL UBICACIÓN HÍBRIDA -->
-<div id="locModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/60" onclick="closeModal('locModal')"></div>
-<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-white rounded-2xl p-5 w-full max-w-md space-y-3">
-<h3 class="font-black text-lg">📍 ¿Dónde estás?</h3>
-<p class="text-xs text-gray-500">Te mostramos las ferreterías más cercanas. Sin GPS también funciona.</p>
-<button onclick="useGPS()" id="gpsBtn" class="w-full bg-plomo text-white font-extrabold py-3 rounded-xl">🎯 Usar mi ubicación actual (GPS)</button>
-<div class="text-center text-xs text-gray-400 font-bold">— o elige tu distrito —</div>
-<label class="block text-xs font-bold">Distrito
-  <select id="locDistrito" class="w-full border rounded-xl px-3 py-2 text-sm mt-1 font-normal">
+<div id="locModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('locModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-3">
+<button type="button" onclick="closeModal('locModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
+<h3 class="font-black text-lg text-ferrex-text">📍 ¿Dónde estás?</h3>
+<p class="text-xs text-ferrex-text-dim">Te mostramos las ferreterías más cercanas. Sin GPS también funciona.</p>
+<button onclick="useGPS()" id="gpsBtn" class="w-full btn-primary py-3">🎯 Usar mi ubicación actual (GPS)</button>
+<div class="text-center text-xs text-ferrex-text-muted font-bold">— o elige tu distrito —</div>
+<label class="block text-xs font-semibold text-ferrex-text-dim">Distrito
+  <select id="locDistrito" class="input-dark w-full rounded-xl px-3 py-2 text-sm mt-1">
     <option value="">Seleccionar…</option>
     <option>Chosica</option><option>Ate</option><option>Santa Anita</option>
     <option>San Juan de Lurigancho</option><option>Chaclacayo</option>
     <option>Santa Clara</option><option>Ricardo Palma</option><option>Lurigancho</option>
   </select>
 </label>
-<label class="block text-xs font-bold">Dirección / referencia <span class="font-normal text-gray-400">(opcional)</span>
-  <input id="locRef" placeholder="Ej. Jr. Lima 240, frente al mercado" class="w-full border rounded-xl px-3 py-2 text-sm mt-1 font-normal">
+<label class="block text-xs font-semibold text-ferrex-text-dim">Dirección / referencia <span class="font-normal text-ferrex-text-muted">(opcional)</span>
+  <input id="locRef" placeholder="Ej. Jr. Lima 240, frente al mercado" class="input-dark w-full rounded-xl px-3 py-2 text-sm mt-1">
 </label>
 <button onclick="saveManualLoc()" class="w-full btn-primary py-2.5">Guardar mi zona ✅</button>
 <button onclick="clearLoc()" class="w-full text-xs font-bold text-ferrex-text-muted mt-2">Ver todas sin filtrar</button>

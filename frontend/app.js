@@ -11,7 +11,7 @@ let storeId = Number(localStorage.getItem('ga_store') || 1);
 let soundOn = localStorage.getItem('ga_sound') !== 'off';
 let seenOrders = new Set(), es = null, pollTimer = null, audioCtx = null;
 const CATS = ['Todo', 'Electricidad', 'Gasfitería', 'Fijaciones', 'Herramientas', 'Pinturas', 'Candados'];
-const SHIPPING_COST = 5.00;
+const SHIPPING_RATE = 0.15; // 15% del subtotal
 const NEXT = { 'Pendiente': ['Aceptado', 'Rechazado'], 'Aceptado': ['En Camino', 'Listo para recojo', 'Completado'], 'En Camino': ['Completado'], 'Listo para recojo': ['Completado'] };
 const $ = s => document.querySelector(s);
 const money = n => 'S/ ' + Number(n).toFixed(2);
@@ -591,7 +591,7 @@ function totals() {
   const all = [...products, ...(window._all || [])];
   for (const [id, q] of Object.entries(cart)) { const p = all.find(x => x.id == id); if (p) { s += p.precio * q; n += q; } }
   const del = document.querySelector('input[name=del]:checked')?.value !== 'recojo';
-  const ship = n === 0 ? 0 : (del ? SHIPPING_COST : 0);
+  const ship = n === 0 ? 0 : (del ? s * SHIPPING_RATE : 0);
   return { sub: s, n, ship, total: s + ship, del };
 }
 async function renderCart() {
@@ -607,7 +607,7 @@ async function renderCart() {
     Object.entries(cart).map(([id, q]) => { const p = all.find(x => x.id == id); if (!p) return '';
       return `<div class="flex justify-between items-center bg-ferrex-bg rounded-xl p-2"><span><b>${q}×</b> ${esc(p.nombre)}</span><b class="text-ferrex-neon">${money(p.precio * q)}</b></div>`; }).join('');
   $('#subT').textContent = money(t.sub);
-  $('#shT').textContent = t.n === 0 ? '—' : (t.del ? `${money(SHIPPING_COST)}` : 'Gratis (recojo en tienda)');
+  $('#shT').textContent = t.n === 0 ? '—' : (t.del ? `${money(t.ship)}` : 'Gratis (recojo en tienda)');
   $('#toT').textContent = money(t.total);
 }
 
@@ -627,7 +627,7 @@ function buildWhatsAppMessage(t, store) {
   
   const paymentText = `💳 Pago: ${pay}`;
   const subtotal = t.sub;
-  const shipping = t.del ? SHIPPING_COST : 0;
+  const shipping = t.del ? t.ship : 0;
   
   return `📋 *Nuevo Pedido FERREX*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n🚚 Envío: S/ ${shipping.toFixed(2)}\n*Total a pagar: S/ ${t.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
 }
@@ -1117,19 +1117,19 @@ async function loadOrders(keepSeen) {
     const list = await api(`/orders?store_id=${storeId}`);
     if (!keepSeen) list.forEach(o => { if (o.status !== 'Pendiente') seenOrders.add(o.id); });
     $('#fPed').innerHTML = list.map(o => `
-      <div class="bg-white rounded-2xl shadow p-4 ${o.status === 'Pendiente' ? 'order-new' : ''}">
-        <div class="flex justify-between items-center"><b>${esc(o.code)}</b>
-          <span class="text-xs font-black px-2 py-1 rounded-full ${ST_CLS[o.status] || 'bg-gray-200'}">${esc(o.status)}</span></div>
-        <p class="text-[11px] text-gray-400">${new Date(o.created_at).toLocaleString('es-PE')}</p>
-        <p class="text-sm mt-1">${o.items.map(i => `${i.qty}× ${esc(i.nombre)}`).join(', ')}</p>
-        <p class="text-xs text-gray-500">${money(o.total)} · ${esc(o.pay)} · ${o.delivery === 'delivery' ? '🛵 ' + esc(o.address) : '🏃 Recojo · ' + esc(o.pickupName || o.address || '')}</p>
-        ${o.clientZone && (o.clientZone.label || o.clientZone.distrito) ? `<p class="text-xs font-bold text-plomo">📌 Zona: ${esc(o.clientZone.label || o.clientZone.distrito)}${o.clientZone.mode === 'gps' ? ' (GPS)' : ''}</p>` : ''}
+      <div class="bg-ferrex-card border border-ferrex-border rounded-2xl shadow p-4 ${o.status === 'Pendiente' ? 'order-new' : ''}">
+        <div class="flex justify-between items-center"><b class="text-ferrex-text">${esc(o.code)}</b>
+          <span class="text-xs font-black px-2 py-1 rounded-full ${ST_CLS[o.status] || 'bg-ferrex-border'}">${esc(o.status)}</span></div>
+        <p class="text-[11px] text-ferrex-text-muted">${new Date(o.created_at).toLocaleString('es-PE')}</p>
+        <p class="text-sm mt-1 text-ferrex-text">${o.items.map(i => `${i.qty}× ${esc(i.nombre)}`).join(', ')}</p>
+        <p class="text-xs text-ferrex-text-dim">${money(o.total)} · ${esc(o.pay)} · ${o.delivery === 'delivery' ? '🛵 ' + esc(o.address) : '🏃 Recojo · ' + esc(o.pickupName || o.address || '')}</p>
+        ${o.clientZone && (o.clientZone.label || o.clientZone.distrito) ? `<p class="text-xs font-bold text-ferrex-neon">📌 Zona: ${esc(o.clientZone.label || o.clientZone.distrito)}${o.clientZone.mode === 'gps' ? ' (GPS)' : ''}</p>` : ''}
         <div class="flex gap-2 mt-2 flex-wrap">${(NEXT[o.status] || []).map(n => {
           const hot = (o.status === 'Pendiente' && n === 'Aceptado') || (o.status === 'Aceptado');
-          return `<button onclick="setOrder(${o.id},'${n}')" class="text-xs font-extrabold px-3 py-2 rounded-xl ${hot ? 'bg-listo text-plomoDark' : 'bg-gray-100'}">${n}</button>`;
+          return `<button onclick="setOrder(${o.id},'${n}')" class="text-xs font-extrabold px-3 py-2 rounded-xl ${hot ? 'bg-listo text-ferrex-bg' : 'bg-ferrex-border text-ferrex-text'}">${n}</button>`;
         }).join('')}</div>
-      </div>`).join('') || '<p class="text-gray-400">Sin pedidos aún.</p>';
-  } catch { $('#fPed').innerHTML = '<p class="text-gray-400">Enciende el backend para ver pedidos.</p>'; }
+      </div>`).join('') || '<p class="text-ferrex-text-muted">Sin pedidos aún.</p>';
+  } catch { $('#fPed').innerHTML = '<p class="text-ferrex-text-muted">Enciende el backend para ver pedidos.</p>'; }
 }
 async function setOrder(id, st) {
   try { await apiAuth(`/orders/${id}`, 'PATCH', { status: st }); loadOrders(true); toast(`Pedido → ${st}`); }
