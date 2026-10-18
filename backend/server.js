@@ -463,7 +463,7 @@ app.delete('/api/products/:id', requireStoreAuth, async (req, res) => {
 // ================= PEDIDOS (con persistencia) =================
 app.post('/api/orders', vOrder, checkValidation, async (req, res) => {
   try {
-    const { store_id, items, total, pay, address, pickupName, delivery, clientZone } = req.body;
+    const { store_id, items, pay, address, pickupName, delivery, clientZone } = req.body;
     
     // Validar items
     if (!Array.isArray(items) || items.length === 0) return sendError(res, 400, 'Pedido vacío');
@@ -701,7 +701,6 @@ app.get('/api/admin/ferreterias', requireSuperAdminAuth, async (req, res) => {
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', fallthrough: true }));
 
 // ================= FRONTEND =================
-const FRONT_DIR = path.join(__dirname, '..');
 app.use('/', express.static(path.join(__dirname, '..'), { extensions: ['html'] }));
 
 // 404 solo API
