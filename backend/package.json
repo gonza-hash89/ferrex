@@ -1,12 +1,14 @@
 {
   "name": "gya-casero-backend",
-  "version": "1.1.0",
-  "description": "Backend G&A Casero - ferreterias, productos con imagenes, pedidos + WhatsApp + SSE",
+  "version": "2.0.0",
+  "description": "Backend FERREX - ferreterías, productos, pedidos, inventario + SuperAdmin",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "build": "echo \"Frontend estatico en ../frontend - sin build requerido\"",
+    "build": "echo \"Frontend estatico en ../ - sin build requerido\"",
+    "db:init": "node db/init.js",
+    "db:migrate": "node db/migrate.js",
     "smoke": "node test-smoke.js"
   },
   "engines": {
@@ -21,6 +23,8 @@
     "express-validator": "^7.3.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.11.5",
+    "bcryptjs": "^2.4.3"
   }
 }
