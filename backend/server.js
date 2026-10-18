@@ -186,7 +186,6 @@ const vOrder = [
 ];
 
 // JWT
-const ACCESS_TTL = process.env.ACCESS_TTL || '15m';
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const IS_HTTPS = BASE_URL.startsWith('https://');
 
