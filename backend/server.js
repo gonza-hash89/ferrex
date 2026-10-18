@@ -187,7 +187,6 @@ const vOrder = [
 ];
 
 // JWT
-const IS_HTTPS = BASE_URL.startsWith('https://');
 
 function signAccess(ferreteriaId) {
   return jwt.sign({ sid: ferreteriaId }, JWT_KEY, { expiresIn: ACCESS_TTL });
@@ -243,7 +242,6 @@ function requireSuperAdminAuth(req, res, next) {
 
 // ---- Static files ----
 const FRONT_DIR = path.join(__dirname, '..');
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
 for (const d of [UPLOAD_DIR]) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 }
@@ -732,7 +730,6 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  const PORT = Number(process.env.PORT || 3001);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 FERREX API v2.0 en ${BASE_URL} (port ${PORT})`);
     console.log(`Uploads: ${UPLOAD_DIR}`);
