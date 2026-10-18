@@ -245,7 +245,6 @@ const FRONT_DIR = path.join(__dirname, '..');
 for (const d of [UPLOAD_DIR]) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 }
-const fotoUrl = f => (f ? `/uploads/${f}` : null);
 
 // ================= API ROUTES =================
 
