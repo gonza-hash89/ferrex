@@ -604,6 +604,14 @@ async function loadProducts() {
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
+function removeCart(id) { delete cart[id]; renderCart(); toast('Eliminado 🗑️'); }
+function updateCartQuantity(id, delta) {
+  const current = cart[id] || 0;
+  const next = current + delta;
+  if (next <= 0) { delete cart[id]; }
+  else { cart[id] = next; }
+  renderCart();
+}
 function totals() {
   let s = 0, n = 0;
   const all = [...products, ...(window._all || [])];
@@ -623,7 +631,19 @@ async function renderCart() {
   const all = [...products, ...(window._all || [])];
   $('#cartBox').innerHTML = t.n === 0 ? '<p class="text-ferrex-text-muted text-center">Vacío</p>' :
     Object.entries(cart).map(([id, q]) => { const p = all.find(x => x.id == id); if (!p) return '';
-      return `<div class="flex justify-between items-center bg-ferrex-bg rounded-xl p-2"><span><b>${q}×</b> ${esc(p.nombre)}</span><b class="text-ferrex-neon">${money(p.precio * q)}</b></div>`; }).join('');
+      const unitPrice = p.precio_oferta || p.precio;
+      return `<div class="flex items-center justify-between bg-ferrex-bg rounded-xl p-2 gap-2">
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <button onclick="updateCartQuantity('${id}', -1)" class="btn-secondary text-xl px-2 py-0 leading-none" aria-label="Disminuir">−</button>
+          <span class="font-bold text-ferrex-text whitespace-nowrap">${q}×</span>
+          <button onclick="updateCartQuantity('${id}', 1)" class="btn-secondary text-xl px-2 py-0 leading-none" aria-label="Incrementar">+</button>
+          <span class="text-ferrex-text truncate">${esc(p.nombre)}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-ferrex-neon font-bold">${money(unitPrice * q)}</span>
+          <button onclick="removeCart('${id}')" class="text-ferrex-text-muted hover:text-ferrex-danger p-1" aria-label="Eliminar">🗑️</button>
+        </div>
+      </div>`; }).join('');
   $('#subT').textContent = money(t.sub);
   $('#shT').textContent = t.n === 0 ? '—' : (t.del ? `${money(t.ship)}` : 'Gratis (recojo en tienda)');
   $('#toT').textContent = money(t.total);
