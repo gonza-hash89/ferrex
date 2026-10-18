@@ -62,10 +62,12 @@ app.use(helmet({
     }
   }
 }));
-// Orígenes permitidos: lista explícita (CORS_ORIGIN) + origen de BASE_URL. Sin '*' + credenciales.
+// Orígenes permitidos: lista explícita (CORS_ORIGIN) + origen de BASE_URL + Netlify. Sin '*' + credenciales.
 const CORS_LIST = (process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean);
 try { CORS_LIST.push(new URL(BASE_URL).origin); } catch {}
+// Agregar Netlify URL por defecto en producción
+CORS_LIST.push('https://ferrex-pe.netlify.app');
 CORS_LIST.push('http://localhost:3001', 'http://127.0.0.1:3001');
 app.use(cors({
   origin: (origin, cb) => {

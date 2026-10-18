@@ -187,7 +187,25 @@ async function init() {
     } catch {}
   }
   
-  const healthResult = await api('/health');
+  // Verificación de salud con timeout y reintentos
+  async function checkHealthWithRetry(retries = 3, delay = 5000) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        const res = await fetch(apiURL('/health'), { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (res.ok) return { ok: true, data };
+      } catch (err) {
+        console.debug(`Health check attempt ${i + 1} failed:`, err.message);
+        if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
+      }
+    }
+    return { ok: false };
+  }
+
+  const healthResult = await checkHealthWithRetry();
   if (healthResult.ok) {
     const h = healthResult.data;
     $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
