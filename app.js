@@ -1,10 +1,10 @@
 /* FERREX v1.3 — WhatsApp + SSE/polling + sonido + PWA + API remota (Netlify) */
 let stores = [], products = [], cart = {};
-// Base de la API: ?api= > localStorage ga_api > window.GA_API > window.__VITE_API_URL__ > '' (mismo origen)
+// Base de la API: ?api= > localStorage ga_api > window.GA_API > window.__VITE_API_URL__ > 'https://ferrex-vdex.onrender.com' (producción)
 const API_Q = new URLSearchParams(location.search).get('api');
 if (API_Q) { try { localStorage.setItem('ga_api', API_Q.replace(/\/$/, '')); } catch {} }
 const ENV_API = (typeof __VITE_API_URL__ !== 'undefined' ? __VITE_API_URL__ : '') || (typeof VITE_API_URL !== 'undefined' ? VITE_API_URL : '');
-const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || '').replace(/\/$/, '');
+const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 'https://ferrex-vdex.onrender.com').replace(/\/$/, '');
 function apiURL(p) { return API_BASE + '/api' + p; }
 let activeCat = 'Todo', pay = 'Efectivo';
 let storeId = Number(localStorage.getItem('ga_store') || 1);
