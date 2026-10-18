@@ -21,6 +21,7 @@ const db = require('./db/pool');
 const dbServices = require('./db/services');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT || 3001);
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -186,7 +187,6 @@ const vOrder = [
 ];
 
 // JWT
-const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const IS_HTTPS = BASE_URL.startsWith('https://');
 
 function signAccess(ferreteriaId) {
