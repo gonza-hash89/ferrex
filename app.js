@@ -931,7 +931,13 @@ async function loadInventory() {
   const allProducts = [...apiProducts, ...storeProducts];
   
   if (!allProducts.length) {
-    $('#invList').innerHTML = '<p class="text-ferrex-text-dim text-center py-8">No hay productos. Agrega tu primer producto.</p>';
+    $('#invList').innerHTML = `
+      <div class="text-center py-12">
+        <p class="text-ferrex-text-dim text-lg mb-4">📦 Aún no tienes productos en tu catálogo</p>
+        <button onclick="scrollToNewProduct()" class="btn-primary px-6 py-3 text-lg font-bold">
+          + Agregar producto
+        </button>
+      </div>`;
     return;
   }
   
@@ -1182,6 +1188,15 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Error inicializando app:', err);
   }
 });
+
+// Scroll to new product form in inventory modal
+function scrollToNewProduct() {
+  openModal('invModal');
+  setTimeout(() => {
+    const form = document.getElementById('newProductForm');
+    if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
 
 // Safe event listener helpers
 function safeOn(id, event, handler) {
