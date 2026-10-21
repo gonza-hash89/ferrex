@@ -224,8 +224,8 @@ async function init() {
 function setMode(m) {
   const c = m === 'c';
   $('#vCli').classList.toggle('active', c); $('#vFer').classList.toggle('active', !c);
-  $('#bCli').className = 'px-3 py-1.5 rounded-lg ' + (c ? 'bg-cinta text-plomo' : '');
-  $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'bg-cinta text-plomo' : '');
+  $('#bCli').className = 'px-3 py-1.5 rounded-lg ' + (c ? 'btn-primary text-xs' : 'btn-secondary text-xs');
+  $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'btn-primary text-xs' : 'btn-secondary text-xs');
   if (!c) { loadOrders(); startRealtime(); } else stopRealtime();
 }
 function ftab(t) {
