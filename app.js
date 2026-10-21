@@ -913,9 +913,21 @@ async function loadInventory() {
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   const storeProducts = demoProducts.filter(p => p.store_id === storeId);
   
-  const apiResult = await api(`/products?store_id=${storeId}`);
+  // Fetch with timeout (10s)
   let apiProducts = [];
-  if (apiResult.ok) apiProducts = apiResult.data;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const apiResult = await fetch(apiURL(`/products?store_id=${storeId}`), { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (apiResult.ok) {
+      const data = await apiResult.json();
+      if (data.ok) apiProducts = data.data || [];
+    }
+  } catch (err) {
+    console.warn('API products timeout/error, using localStorage only:', err.message);
+    apiProducts = [];
+  }
   
   const allProducts = [...apiProducts, ...storeProducts];
   
