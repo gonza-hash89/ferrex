@@ -224,8 +224,8 @@ async function init() {
 function setMode(m) {
   const c = m === 'c';
   $('#vCli').classList.toggle('active', c); $('#vFer').classList.toggle('active', !c);
-  $('#bCli').className = 'px-3 py-1.5 rounded-lg ' + (c ? 'btn-primary text-xs' : 'btn-secondary text-xs');
-  $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'btn-primary text-xs' : 'btn-secondary text-xs');
+  $('#bCli').className = 'px-3 py-1.5 rounded-lg ' + (c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
+  $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
   if (!c) { loadOrders(); startRealtime(); } else stopRealtime();
 }
 function ftab(t) {
@@ -589,7 +589,7 @@ async function loadProducts() {
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
       <button onclick="addCart(${p.id})" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
-    </div>`).join('') || '<div class="col-span-3 text-center py-12"><p class="text-ferrex-text-muted text-lg mb-4">📦 Sin productos disponibles</p><button onclick="scrollToNewProduct()" class="btn-primary px-8 py-3 text-lg font-bold">+ Agregar producto</button></div>';
+    </div>`).join('') || '<div class="col-span-3 text-center py-12"><p class="text-ferrex-text-muted text-lg mb-4">📦 Sin productos disponibles</p><button onclick="scrollToNewProduct()" style="background-color: #17FF00; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">+ Agregar producto</button></div>';
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
@@ -923,9 +923,7 @@ async function loadInventory() {
     $('#invList').innerHTML = `
       <div class="text-center py-12">
         <p class="text-ferrex-text-dim text-lg mb-4">📦 Aún no tienes productos en tu catálogo</p>
-        <button onclick="scrollToNewProduct()" class="btn-primary px-6 py-3 text-lg font-bold">
-          + Agregar producto
-        </button>
+        <button onclick="scrollToNewProduct()" style="background-color: #17FF00; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">+ Agregar producto</button>
       </div>`;
     return;
   }
@@ -1180,7 +1178,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Scroll to new product form in inventory modal
 function scrollToNewProduct() {
-  openModal('invModal');
+  const modal = document.getElementById('invModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+  }
   setTimeout(() => {
     const form = document.getElementById('newProductForm');
     if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
