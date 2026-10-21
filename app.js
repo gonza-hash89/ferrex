@@ -589,7 +589,7 @@ async function loadProducts() {
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
       <button onclick="addCart(${p.id})" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
-    </div>`).join('') || '<p class="text-ferrex-text-muted col-span-3 text-center py-8">Sin productos. La ferretería puede subir fotos con "Agregar producto".</p>';
+    </div>`).join('') || '<div class="col-span-3 text-center py-12"><p class="text-ferrex-text-muted text-lg mb-4">📦 Sin productos disponibles</p><button onclick="scrollToNewProduct()" class="btn-primary px-8 py-3 text-lg font-bold">+ Agregar producto</button></div>';
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
