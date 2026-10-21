@@ -3,6 +3,8 @@ let stores = [], products = [], cart = {};
 // Base de la API: ?api= > localStorage ga_api > window.GA_API > window.__VITE_API_URL__ > 'https://ferrex-vdex.onrender.com' (producción)
 const API_Q = new URLSearchParams(location.search).get('api');
 if (API_Q) { try { localStorage.setItem('ga_api', API_Q.replace(/\/$/, '')); } catch {} }
+// Limpiar cualquier flag de demo al cargar
+localStorage.removeItem('ga_demo_mode');
 const ENV_API = (typeof __VITE_API_URL__ !== 'undefined' ? __VITE_API_URL__ : '') || (typeof VITE_API_URL !== 'undefined' ? VITE_API_URL : '');
 const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 'https://ferrex-vdex.onrender.com').replace(/\/$/, '');
 function apiURL(p) { return API_BASE + '/api' + p; }
@@ -174,19 +176,6 @@ function handleDeepLink(extraDistritos = []) {
 async function init() {
   paintSoundBtn(); paintLoc(); handleDeepLink(); initLegal();
   
-  // Restaurar sesión demo si existe
-  const demoSession = localStorage.getItem('ga_active_store');
-  if (demoSession) {
-    try {
-      const store = JSON.parse(demoSession);
-      storeId = store.id;
-      localStorage.setItem('ga_store', storeId);
-      AT = 'demo-token-' + Date.now();
-      await loadStores();
-      paintSession();
-    } catch {}
-  }
-  
   // Verificación de salud con timeout y reintentos
   async function checkHealthWithRetry(retries = 3, delay = 5000) {
     for (let i = 0; i < retries; i++) {
@@ -211,9 +200,9 @@ async function init() {
     $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
   } else {
-    // Modo demo silencioso - sin error visible bloqueante
-    $('#apiStat').innerHTML = `○ Modo demo (offline) · <button onclick="configAPI()" class="underline">⚙️ configurar API</button>`;
-    $('#apiStat').className = 'text-center text-[11px] py-1 bg-ferrex-warning text-ferrex-bg';
+    // API no disponible - mostrar error pero NO modo demo
+    $('#apiStat').innerHTML = `○ API no disponible · <button onclick="configAPI()" class="underline">⚙️ configurar API</button> · <button onclick="location.reload()" class="underline ml-2">Reintentar</button>`;
+    $('#apiStat').className = 'text-center text-[11px] py-1 bg-ferrex-danger text-ferrex-bg';
   }
   await loadStores(); await loadProducts();
   const before = JSON.stringify(getLoc());
