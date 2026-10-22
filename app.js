@@ -1,9 +1,11 @@
-/* FERREX v1.4 — WhatsApp + SSE/polling + sonido + PWA + API remota (Netlify) */
+/* FERREX v1.5 — WhatsApp + SSE/polling + sonido + PWA + API remota (Netlify) */
 let stores = [], products = [], cart = {};
 let isInventoryOpen = false; // Track inventory modal state
 // Base de la API: ?api= > localStorage ga_api > window.GA_API > window.__VITE_API_URL__ > '' (mismo origen, ideal con Render)
 const API_Q = new URLSearchParams(location.search).get('api');
 if (API_Q) { try { localStorage.setItem('ga_api', API_Q.replace(/\/$/, '')); } catch {} }
+// Desactivar modo demo cuando hay una ferretería seleccionada
+localStorage.removeItem('ga_demo_mode');
 const ENV_API = (typeof __VITE_API_URL__ !== 'undefined' ? __VITE_API_URL__ : '') || (typeof VITE_API_URL !== 'undefined' ? VITE_API_URL : '');
 const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 'https://ferrex-vdex.onrender.com').replace(/\/$/, '');
 function apiURL(p) { return API_BASE + '/api' + p; }
@@ -148,7 +150,7 @@ function initLegal() {
   const y = $('#year'); if (y) y.textContent = new Date().getFullYear();
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    for (const id of ['locModal', 'loginModal', 'storeModal', 'prodModal', 'privModal', 'termModal', 'devModal', 'libroModal']) {
+    for (const id of ['locModal', 'loginModal', 'storeModal', 'prodModal', 'invModal', 'privModal', 'termModal', 'devModal', 'libroModal']) {
       if (!$('#' + id)?.classList.contains('hidden')) { closeModal(id); break; }
     }
   });
@@ -217,9 +219,7 @@ async function init() {
       } catch (err) {
         console.debug(`Health check attempt ${i + 1} failed:`, err.message);
         if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
-      }
-    }
-    return { ok: false };
+}
   }
 
   const healthResult = await checkHealthWithRetry();
@@ -602,12 +602,13 @@ async function loadProducts() {
   const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`);
   if (productsResult.ok) apiProducts = productsResult.data;
   
-  // Cargar productos demo de localStorage
+  // Cargar productos demo de localStorage solo si no hay productos de la API
   let demoProducts = [];
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   const storeDemoProducts = demoProducts.filter(p => p.store_id === storeId);
   
-  products = [...apiProducts, ...storeDemoProducts];
+  // Solo usar productos demo si no hay productos de la API
+  products = apiProducts.length > 0 ? apiProducts : [...apiProducts, ...storeDemoProducts];
   
   $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="cat-pill ${activeCat === c ? 'active' : 'inactive'}">${c}</button>`).join('');
   $('#grid').innerHTML = products.filter(p => p.stock).map(p => `
@@ -943,10 +944,8 @@ async function loadInventory() {
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   const storeProducts = demoProducts.filter(p => p.store_id === storeId);
   
-  // Fetch with retry (3 attempts, 8s timeout each)
+  // Fetch with retry (3 attempts, 8s timeout each) + exponential backoff
   let apiProducts = [];
-  const maxRetries = 3;
-  const timeoutMs = 8000;
   
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -956,10 +955,14 @@ async function loadInventory() {
       clearTimeout(timeoutId);
       if (apiResult.ok) {
         const data = await apiResult.json();
-        if (data.ok) apiProducts = data.data || [];
-        break; // Success, exit retry loop
+        if (data.ok) {
+          apiProducts = data.data || [];
+          break; // Success, exit retry loop
+        }
+        throw new Error(`HTTP ${apiResult.status}`);
+      } else {
+        throw new Error(`HTTP ${apiResult.status}`);
       }
-      throw new Error(`HTTP ${apiResult.status}`);
     } catch (err) {
       console.warn(`API products attempt ${attempt}/3 failed:`, err.message);
       if (attempt === 3) {
@@ -968,9 +971,11 @@ async function loadInventory() {
       } else {
         // Wait before retry (exponential backoff)
         await new Promise(r => setTimeout(r, 1000 * attempt));
-      }
+closeModal('invModal');
+      loadInventory();
     }
   }
+}
   
   const allProducts = [...apiProducts, ...storeProducts];
   
@@ -1091,7 +1096,6 @@ async function addInventoryProduct(e) {
       loadInventory();
     }
   }
-}
 }
 
 async function updateInventoryField(id, field, value) {
@@ -1225,8 +1229,19 @@ async function setOrder(id, st) {
   catch (e) { toast(e.message); }
 }
 
-// Inicialización segura con DOMContentLoaded
+// Close modal on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  for (const id of ['locModal', 'loginModal', 'storeModal', 'prodModal', 'invModal', 'privModal', 'termModal', 'devModal', 'libroModal']) {
+    if (!$('#' + id)?.classList.contains('hidden')) { closeModal(id); break; }
+  }
+});
+
+// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+  // Desactivar modo demo al cargar
+  localStorage.removeItem('ga_demo_mode');
+  
   try {
     init();
   } catch (err) {
@@ -1234,20 +1249,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Scroll to new product form in inventory modal
-function scrollToNewProduct() {
-  const modal = document.getElementById('invModal');
-  if (modal) {
-    modal.classList.remove('hidden');
-    modal.style.display = 'block';
+// Close modal on overlay click
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay') || e.target.matches('[data-close-modal]')) {
+    const modal = e.target.closest('.modal');
+    if (modal) closeModal(modal.id);
   }
-  setTimeout(() => {
-    const form = document.getElementById('newProductForm');
-    if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
-}
-
-// Safe event listener helpers
-function safeOn(id, event, handler) {
-  document.getElementById(id)?.addEventListener(event, handler);
-}
+});
