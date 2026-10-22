@@ -1,10 +1,9 @@
-/* FERREX v1.3 — WhatsApp + SSE/polling + sonido + PWA + API remota (Netlify) */
+/* FERREX v1.4 — WhatsApp + SSE/polling + sonido + PWA + API remota (Netlify) */
 let stores = [], products = [], cart = {};
-// Base de la API: ?api= > localStorage ga_api > window.GA_API > window.__VITE_API_URL__ > 'https://ferrex-vdex.onrender.com' (producción)
+let isInventoryOpen = false; // Track inventory modal state
+// Base de la API: ?api= > localStorage ga_api > window.GA_API > window.__VITE_API_URL__ > '' (mismo origen, ideal con Render)
 const API_Q = new URLSearchParams(location.search).get('api');
 if (API_Q) { try { localStorage.setItem('ga_api', API_Q.replace(/\/$/, '')); } catch {} }
-// Limpiar cualquier flag de demo al cargar
-localStorage.removeItem('ga_demo_mode');
 const ENV_API = (typeof __VITE_API_URL__ !== 'undefined' ? __VITE_API_URL__ : '') || (typeof VITE_API_URL !== 'undefined' ? VITE_API_URL : '');
 const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 'https://ferrex-vdex.onrender.com').replace(/\/$/, '');
 function apiURL(p) { return API_BASE + '/api' + p; }
@@ -85,14 +84,40 @@ function previewImage(input) {
 }
 function absImg(u) { if (!u) return u; return u.startsWith('/') ? API_BASE + u : u; }
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.classList.add('hidden'), 300); }, 2200); }
-function openModal(id) { $('#' + id).classList.remove('hidden'); }
-function closeModal(id) { $('#' + id).classList.add('hidden'); }
+function openModal(id) { 
+  const el = $('#' + id); 
+  if (el) { 
+    el.classList.remove('hidden'); 
+    el.style.display = 'flex'; 
+    document.body.style.overflow = 'hidden'; 
+  } 
+}
+
+function closeModal(id) { 
+  const el = $('#' + id); 
+  if (el) { 
+    el.classList.add('hidden'); 
+    el.style.display = 'none'; 
+    document.body.style.overflow = ''; 
+  } 
+}
+
+// Close modal on overlay click
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay') || e.target.matches('[data-close-modal]')) {
+    const modal = e.target.closest('.modal');
+    if (modal) closeModal(modal.id);
+  }
+});
 function unlockAudio() { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {} }
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
 async function api(path, opts = {}) {
   try {
-    const r = await fetch(apiURL(path), opts);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const r = await fetch(apiURL(path), { ...opts, signal: controller.signal });
+    clearTimeout(timeoutId);
     let j = null; 
     try { j = await r.json(); } catch { throw new Error('Respuesta inválida del servidor'); }
     if (!r.ok || j.ok === false) throw new Error(j.error || ('Error ' + r.status));
@@ -101,6 +126,9 @@ async function api(path, opts = {}) {
     // Modo demo silencioso - no lanzar error, retornar flag
     console.debug('API unavailable (demo mode):', err.message);
     return { ok: false, error: err.message, demo: true };
+  } finally {
+    // Cleanup timeout if fetch completed before abort
+    // (clearTimeout is safe to call even if already cleared)
   }
 }
 function configAPI() {
@@ -199,10 +227,12 @@ async function init() {
     const h = healthResult.data;
     $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
+    localStorage.removeItem('ga_demo_mode');
   } else {
-    // API no disponible - mostrar error pero NO modo demo
-    $('#apiStat').innerHTML = `○ API no disponible · <button onclick="configAPI()" class="underline">⚙️ configurar API</button> · <button onclick="location.reload()" class="underline ml-2">Reintentar</button>`;
-    $('#apiStat').className = 'text-center text-[11px] py-1 bg-ferrex-danger text-ferrex-bg';
+    // API no disponible - modo demo silencioso, NO mostrar error rojo
+    localStorage.setItem('ga_demo_mode', '1');
+    $('#apiStat').innerHTML = `○ Modo offline (localStorage) · <button onclick="configAPI()" class="underline">⚙️ configurar API</button> · <button onclick="location.reload()" class="underline ml-2">Reintentar</button>`;
+    $('#apiStat').className = 'text-center text-[11px] py-1 bg-amber-900/50 text-amber-200';
   }
   await loadStores(); await loadProducts();
   const before = JSON.stringify(getLoc());
@@ -772,8 +802,8 @@ async function toggleStock(id, val) {
     // 1. Intentar API
     await apiAuth(`/products/${id}`, 'PATCH', { stock: newStock });
   } catch (err) {
-    // 2. Fallback localStorage demo
-    console.warn('API stock toggle falló, actualizando localStorage:', err.message);
+    // 2. Fallback localStorage demo - SILENCIOSO
+    console.debug('API stock toggle falló, actualizando localStorage:', err.message);
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
     const idx = demoProducts.findIndex(p => p.id === id);
@@ -1051,14 +1081,17 @@ async function addInventoryProduct(e) {
     demoProducts.push(productData);
     localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
     toast('Producto agregado localmente (modo demo) ✅');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = originalText;
-    form.reset();
-    $('#invFotoPrev').classList.add('hidden');
-    $('#invFotoPrev').src = '';
-    loadInventory();
+} finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+      form.reset();
+      $('#invFotoPrev').classList.add('hidden');
+      $('#invFotoPrev').src = '';
+      closeModal('invModal');
+      loadInventory();
+    }
   }
+}
 }
 
 async function updateInventoryField(id, field, value) {
@@ -1074,7 +1107,7 @@ async function updateInventoryField(id, field, value) {
     }
     toast('Actualizado ✅');
   } catch (err) {
-    // Fallback localStorage
+    // Fallback localStorage - SILENCIOSO
     let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
     const idx = demoProducts.findIndex(p => p.id === id);
     if (idx >= 0) {
