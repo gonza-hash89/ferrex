@@ -913,20 +913,33 @@ async function loadInventory() {
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   const storeProducts = demoProducts.filter(p => p.store_id === storeId);
   
-  // Fetch with timeout (10s)
+  // Fetch with retry (3 attempts, 8s timeout each)
   let apiProducts = [];
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const apiResult = await fetch(apiURL(`/products?store_id=${storeId}`), { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (apiResult.ok) {
-      const data = await apiResult.json();
-      if (data.ok) apiProducts = data.data || [];
+  const maxRetries = 3;
+  const timeoutMs = 8000;
+  
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const apiResult = await fetch(apiURL(`/products?store_id=${storeId}`), { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (apiResult.ok) {
+        const data = await apiResult.json();
+        if (data.ok) apiProducts = data.data || [];
+        break; // Success, exit retry loop
+      }
+      throw new Error(`HTTP ${apiResult.status}`);
+    } catch (err) {
+      console.warn(`API products attempt ${attempt}/3 failed:`, err.message);
+      if (attempt === 3) {
+        console.warn('All retries failed, using localStorage only:', err.message);
+        apiProducts = [];
+      } else {
+        // Wait before retry (exponential backoff)
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
     }
-  } catch (err) {
-    console.warn('API products timeout/error, using localStorage only:', err.message);
-    apiProducts = [];
   }
   
   const allProducts = [...apiProducts, ...storeProducts];
