@@ -206,12 +206,31 @@ function handleDeepLink(extraDistritos = []) {
 async function init() {
   paintSoundBtn(); paintLoc(); handleDeepLink(); initLegal();
   
-  // Verificación de salud con timeout y reintentos
+// Ping silencioso en segundo plano para mantener Render despierto
+  let healthCheckInterval = null;
+  function startHealthCheckPing() {
+    if (healthCheckInterval) clearInterval(healthCheckInterval);
+    healthCheckInterval = setInterval(async () => {
+      try {
+        await fetch(apiURL('/health'), { method: 'GET', cache: 'no-cache' });
+        console.debug('🏓 Health check ping sent');
+      } catch (err) {
+        console.debug('Health check ping failed:', err.message);
+      }
+    }, 4 * 60 * 1000); // Ping cada 4 minutos para mantener Render despierto
+  }
+
+  function stopHealthCheckPing() {
+    if (healthCheckInterval) clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+  }
+
+  // Verificación de salud con timeout extendido a 45s
   async function checkHealthWithRetry(retries = 3, delay = 5000) {
     for (let i = 0; i < retries; i++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout para Render cold start
         const res = await fetch(apiURL('/health'), { signal: controller.signal });
         clearTimeout(timeoutId);
         const data = await res.json();
@@ -220,19 +239,22 @@ async function init() {
         console.debug(`Health check attempt ${i + 1} failed:`, err.message);
         if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
 }
-  }
-
+}
+}
+  
   const healthResult = await checkHealthWithRetry();
   if (healthResult.ok) {
     const h = healthResult.data;
     $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
     localStorage.removeItem('ga_demo_mode');
+    startHealthCheckPing(); // Iniciar ping en segundo plano
   } else {
     // API no disponible - modo demo silencioso, NO mostrar error rojo
     localStorage.setItem('ga_demo_mode', '1');
     $('#apiStat').innerHTML = `○ Modo offline (localStorage) · <button onclick="configAPI()" class="underline">⚙️ configurar API</button> · <button onclick="location.reload()" class="underline ml-2">Reintentar</button>`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-amber-900/50 text-amber-200';
+    stopHealthCheckPing(); // Detener ping si API no disponible
   }
   await loadStores(); await loadProducts();
   const before = JSON.stringify(getLoc());
@@ -1095,9 +1117,8 @@ async function addInventoryProduct(e) {
       closeModal('invModal');
       loadInventory();
     }
-  }
 }
-
+  
 async function updateInventoryField(id, field, value) {
   if (!AT) return;
   try {
@@ -1229,19 +1250,104 @@ async function setOrder(id, st) {
   catch (e) { toast(e.message); }
 }
 
-// Close modal on Escape key
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  for (const id of ['locModal', 'loginModal', 'storeModal', 'prodModal', 'invModal', 'privModal', 'termModal', 'devModal', 'libroModal']) {
-    if (!$('#' + id)?.classList.contains('hidden')) { closeModal(id); break; }
+// ==================== SUPERADMIN FUNCTIONS ====================
+
+// Cargar datos del SuperAdmin
+async function loadSuperAdminData() {
+  try {
+    $('#superAdminStoresList').innerHTML = '<tr><td colspan="7" class="text-center py-4 text-ferrex-text-dim">Cargando…</td>';
+    const [storesRes, statsRes] = await Promise.all([
+      api('/admin/ferreterias'),
+      api('/admin/stats')
+    ]);
+    
+    // Actualizar estadísticas
+    if (statsRes.ok) {
+      const stats = statsRes.data;
+      $('#statTotalSales').textContent = money(stats.total_ventas || 0);
+      $('#statCompletedOrders').textContent = stats.completados || 0;
+      $('#statTotalStores').textContent = stats.total_ferreterias || 0;
+    }
+    
+    // Renderizar lista de ferreterías
+    if (storesRes.ok) {
+      const stores = storesRes.data || [];
+      $('#superAdminStoresList').innerHTML = stores.map(s => {
+        const revenue = Number(s.total_sales || 0);
+        const commission = revenue * 0.15;
+        return `<tr class="border-t border-ferrex-border">
+          <td class="px-3 py-2"><b class="text-ferrex-text">${esc(s.nombre)}</b></td>
+          <td class="px-3 py-2 text-xs text-ferrex-text-dim">${esc(s.ruc_dni || '—')}</td>
+          <td class="px-3 py-2 text-xs text-ferrex-text-dim">${esc(s.telefono || '—')}</td>
+          <td class="px-3 py-2 text-center">
+            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${s.abierto !== false ? 'bg-listo text-plomoDark' : 'bg-ferrex-danger text-white'}">${s.abierto !== false ? 'Activo' : 'Inactivo'}</span></td>
+          <td class="px-3 py-2 text-right text-sm text-ferrex-text">${money(revenue)}</td>
+          <td class="text-right px-3 py-2 text-sm text-ferrex-text-dim">${money(revenue * 0.15)}</td>
+          <td class="text-center px-3 py-2 text-xs font-bold text-ferrex-warning">${money(revenue * 0.15)}</td>
+        </tr>`}).join('') || '<tr><td colspan="7" class="text-center py-4 text-ferrex-text-dim">No hay ferreterías registradas</td>';
+    }
+  } catch (err) {
+    console.error('Error loading superadmin data:', err);
+    toast('Error cargando datos de SuperAdmin');
   }
-});
+}
+
+// Cargar datos del SuperAdmin al abrir el modal
+function openSuperAdminModal() {
+  openModal('superAdminModal');
+  loadSuperAdminData();
+}
+
+// Guardar configuración de comisión
+async function saveCommissionConfig() {
+  const rate = parseFloat($('#commissionRate').val()) || 15;
+  const currency = $('#commissionCurrency').val();
+  try {
+    await apiAuth('/admin/commission', 'POST', { rate, currency });
+    toast('Configuración de comisión guardada ✅');
+  } catch (e) {
+    toast('Error guardando configuración');
+  }
+}
+
+function resetCommissionConfig() {
+  $('#commissionRate').val(15);
+  $('#commissionCurrency').val('PEN');
+  toast('Configuración restablecida');
+}
+
+async function calculateAllCommissions() {
+  try {
+    const res = await apiAuth('/admin/commissions/calculate', 'POST');
+    if (res.ok) {
+      const data = res.data;
+      $('#totalCommissionDue').textContent = money(data.total_commission || 0);
+      toast('Comisiones calculadas ✅');
+      loadSuperAdminData(); // Recargar tabla
+    } else {
+      toast('Error calculando comisiones');
+    }
+  } catch (e) {
+    toast('Error calculando comisiones');
+  }
+}
+
+function exportCommissionsCSV() {
+  toast('Exportación CSV en desarrollo');
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
   // Desactivar modo demo al cargar
   localStorage.removeItem('ga_demo_mode');
-  
+
+  // 🔍 Registrar Service Worker (PWA offline)
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[FERREX] SW registrado:', reg.scope))
+      .catch(err => console.warn('[FERREX] SW registro falló:', err));
+  }
+
   try {
     init();
   } catch (err) {

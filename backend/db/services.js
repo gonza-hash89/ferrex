@@ -77,7 +77,16 @@ async function getFerreteriasByZona(zona) {
 }
 
 async function getAllFerreterias() {
-  const result = await db.query('SELECT * FROM ferreterias ORDER BY creada_en DESC');
+  const result = await db.query(`
+    SELECT f.*, COALESCE(p.total_ventas, 0) as total_sales
+    FROM ferreterias f
+    LEFT JOIN (
+      SELECT ferreteria_id, COALESCE(SUM(total) FILTER (WHERE estado != 'Rechazado'), 0) as total_ventas
+      FROM pedidos
+      GROUP BY ferreteria_id
+    ) p ON f.id = p.ferreteria_id
+    ORDER BY f.creada_en DESC
+  `);
   return result.rows;
 }
 

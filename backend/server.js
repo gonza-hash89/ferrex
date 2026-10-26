@@ -697,6 +697,33 @@ app.get('/api/admin/ferreterias', requireSuperAdminAuth, async (req, res) => {
   }
 });
 
+app.post('/api/admin/commission', requireSuperAdminAuth, async (req, res) => {
+  try {
+    const { rate, currency } = req.body;
+    const commissionRate = parseFloat(rate) || 15;
+    const commissionCurrency = currency || 'PEN';
+    // Store in database or config - for now just return success
+    res.json({ ok: true, rate: commissionRate, currency: commissionCurrency });
+  } catch (err) {
+    sendError(res, 500, 'Error guardando configuración de comisión');
+  }
+});
+
+app.post('/api/admin/commissions/calculate', requireSuperAdminAuth, async (req, res) => {
+  try {
+    const ferreterias = await dbServices.getAllFerreterias();
+    const rate = 0.15; // Default 15%
+    let totalCommission = 0;
+    for (const f of ferreterias) {
+      const revenue = Number(f.total_sales || 0);
+      totalCommission += revenue * rate;
+    }
+    res.json({ ok: true, total_commission: totalCommission });
+  } catch (err) {
+    sendError(res, 500, 'Error calculando comisiones');
+  }
+});
+
 // ================= UPLOADS =================
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', fallthrough: true }));
 

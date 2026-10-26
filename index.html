@@ -310,13 +310,13 @@ tailwind.config = {
   <div id="noSes" class="mb-4 bg-ferrex-neon/10 border-2 border-ferrex-neon rounded-2xl p-3 text-sm">
     🔒 <b class="text-ferrex-text">Gestiona tu ferretería:</b> <button onclick="openModal('loginModal')" class="font-bold underline text-ferrex-neon hover:text-ferrex-neon-dim">inicia sesión</button> para publicar, cambiar stock y tu horario.
   </div>
-  <div class="flex gap-2 flex-wrap items-center mb-4">
+<div class="flex gap-2 flex-wrap items-center mb-4">
     <button onclick="ftab('ped')" class="btn-secondary font-bold px-4 py-2 rounded-xl text-sm">🧾 Pedidos</button>
     <button onclick="ftab('stk')" class="btn-secondary font-bold px-4 py-2 rounded-xl text-sm">📦 Stock</button>
     <button onclick="ftab('inv')" class="btn-primary font-bold px-4 py-2 rounded-xl text-sm">📋 Inventario</button>
+    <button onclick="openModal('superAdminModal')" class="btn-outline font-bold px-4 py-2 rounded-xl text-sm" title="SuperAdmin">🔐 SuperAdmin</button>
     <span id="ssePill" class="text-[11px] font-bold px-3 py-1.5 rounded-full bg-ferrex-card border border-ferrex-border">● conectando…</span>
     <button id="sndBtn" onclick="toggleSound()" class="text-[11px] font-bold px-3 py-1.5 rounded-full btn-secondary">🔔 Sonido ON</button>
-  </div>
   
   <!-- Mi horario -->
   <div class="bg-ferrex-card border border-ferrex-border rounded-2xl shadow-xl p-4 mt-3 max-w-2xl">
@@ -556,16 +556,91 @@ tailwind.config = {
 <p id="recOk" class="hidden text-xs font-bold text-ferrex-neon"></p>
 </form></div></div>
 
-<!-- BANNER COOKIES -->
-<div id="cookieBar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-ferrex-bg-alt border-t border-ferrex-border text-ferrex-text text-xs">
-  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
-    <p class="flex-1 min-w-[220px] text-ferrex-text-dim">🍪 Usamos cookies y almacenamiento local para guardar tu distrito seleccionado y mantener tu carrito de compras.</p>
-    <button onclick="acceptCookies()" class="btn-primary px-5 py-2 rounded-xl text-sm">Aceptar</button>
+<!-- MODAL SUPERADMIN -->
+<div id="superAdminModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('superAdminModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><div class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-4xl modal-content" onsubmit="saveSuperAdminConfig(event)">
+<button type="button" onclick="closeModal('superAdminModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
+<h3 class="font-black text-lg text-ferrex-text mb-4">🔐 Panel SuperAdmin</h3>
+
+<!-- Configuración de Comisión -->
+<div class="bg-ferrex-bg rounded-xl p-4 mb-4 border border-ferrex-border">
+  <h4 class="font-bold text-ferrex-text mb-3">⚙️ Configuración de Comisión</h4>
+  <div class="grid grid-cols-2 gap-4 mb-4">
+    <div>
+      <label class="block text-xs font-semibold text-ferrex-text-dim">% Comisión (%)</label>
+      <input id="commissionRate" type="number" step="0.1" min="0" max="50" value="15" class="input-dark w-full rounded-xl px-3 py-2 text-sm" onchange="updateCommissionRate(this.value)">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-ferrex-text-dim">Moneda</label>
+      <select id="commissionCurrency" class="input-dark w-full rounded-xl px-3 py-2 text-sm" onchange="updateCommissionCurrency(this.value)">
+        <option value="PEN">PEN (S/)</option>
+        <option value="USD">USD ($)</option>
+      </select>
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <button type="button" onclick="saveCommissionConfig()" class="btn-primary px-4 py-2 rounded-xl text-sm">Guardar Configuración ✅</button>
+    <button type="button" onclick="resetCommissionConfig()" class="btn-secondary px-4 py-2 rounded-xl text-sm">Restablecer</button>
   </div>
 </div>
 
-<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-ferrex-card border border-ferrex-neon text-ferrex-text text-sm font-bold px-5 py-3 rounded-xl z-[60] shadow-neon"></div>
-<script src="/app.js?v=20261019"></script>
-<script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{})); }</script>
-</body>
-</html>
+<!-- Métricas Clave -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+  <div class="bg-ferrex-bg rounded-xl p-4 border border-ferrex-border text-center">
+    <p class="text-xs text-ferrex-text-dim">Ventas Totales Plataforma</p>
+    <p id="statTotalSales" class="text-2xl font-black text-ferrex-neon">S/ 0.00</p>
+  </div>
+  <div class="bg-ferrex-bg rounded-xl p-4 border border-ferrex-border text-center">
+    <p class="text-xs text-ferrex-text-dim">Pedidos Completados</p>
+    <p id="statCompletedOrders" class="text-2xl font-black text-ferrex-neon">0</p>
+  </div>
+  <div class="bg-ferrex-bg rounded-xl p-4 border border-ferrex-border text-center">
+    <p class="text-xs text-ferrex-text-dim">Ferreterías Registradas</p>
+    <p id="statTotalStores" class="text-2xl font-black text-ferrex-neon">0</p>
+  </div>
+</div>
+
+<!-- Ferreterías Aliadas -->
+<div class="mb-4">
+  <div class="flex justify-between items-center mb-2">
+    <h4 class="font-bold text-ferrex-text">🏪 Ferreterías Aliadas</h4>
+    <button onclick="loadSuperAdminData()" class="btn-secondary text-xs px-3 py-1 rounded-lg">🔄 Actualizar</button>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-ferrex-bg border-b border-ferrex-border">
+          <th class="text-left px-3 py-2 text-xs font-bold text-ferrex-text-dim">Ferretería</th>
+          <th class="text-left px-3 py-2 text-xs font-bold text-ferrex-text-dim">RUC/DNI</th>
+          <th class="text-left px-3 py-2 text-xs font-bold text-ferrex-text-dim">Teléfono</th>
+          <th class="text-center px-3 py-2 text-xs font-bold text-ferrex-text-dim">Estado</th>
+          <th class="text-right px-3 py-2 text-xs font-bold text-ferrex-text-dim">Ingresos (S/)</th>
+          <th class="text-center px-3 py-2 text-xs font-bold text-ferrex-text-dim">Comisión (15%)</th>
+          <th class="text-center px-3 py-2 text-xs font-bold text-ferrex-text-dim">Por Cobrar</th>
+        </thead>
+        <tbody id="superAdminStoresList"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Módulo de Comisiones -->
+  <div class="mt-4">
+    <h4 class="font-bold text-ferrex-text mb-3">💰 Módulo de Comisiones</h4>
+    <div class="bg-ferrex-bg rounded-xl p-4 border border-ferrex-border">
+      <p class="text-xs text-ferrex-text-dim mb-3">La comisión se calcula automáticamente sobre el total de ventas completadas de cada ferretería.</p>
+        <div>
+          <label class="block text-xs font-semibold text-ferrex-text-dim">% Comisión Global</label>
+          <input id="globalCommissionRate" type="number" step="0.1" min="0" max="50" value="15" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-ferrex-text-dim">Total a Cobrar Este Mes</label>
+          <p id="totalCommissionDue" class="text-xl font-black text-ferrex-neon">S/ 0.00</p>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button onclick="calculateAllCommissions()" class="btn-primary px-4 py-2 rounded-xl text-sm">Calcular Comisiones ✅</button>
+        <button onclick="exportCommissionsCSV()" class="btn-secondary px-4 py-2 rounded-xl text-sm ml-2">Exportar CSV</button>
+      </div>
+    </div>
+  </div>
+</div></div></div>
