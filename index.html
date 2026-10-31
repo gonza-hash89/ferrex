@@ -363,18 +363,6 @@ tailwind.config = {
 <script src="app.js"></script>
 </body>
 </html>
-<button type="button" onclick="closeModal('loginModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
-<h3 class="font-black text-lg text-ferrex-text">🔐 Entrar como ferretería</h3>
-<input name="identifier" required inputmode="numeric" placeholder="Celular registrado (9XX XXX XXX)" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
-<input name="password" required type="password" placeholder="Contraseña" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
-<!-- Mensaje de error -->
-<div id="loginFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
-<button type="submit" class="w-full btn-primary py-2.5" id="loginSubmitBtn">Entrar →</button>
-<p class="text-xs text-ferrex-text-dim text-center">¿Sin cuenta? <button type="button" onclick="closeModal('loginModal');openModal('storeModal')" class="font-bold text-ferrex-neon hover:text-ferrex-neon-dim">Regístrala aquí</button></p>
-</form></div></div>
-
-<!-- MODAL TIENDA -->
-<div id="storeModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('storeModal')"></div>
 <div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="storeForm" class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-2 relative" onsubmit="saveStore(event)">
 <button type="button" onclick="closeModal('storeModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
 <h3 class="font-black text-lg text-ferrex-text">🏪 Registrar mi ferretería</h3>
