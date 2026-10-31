@@ -359,9 +359,10 @@ tailwind.config = {
 <button onclick="clearLoc()" class="w-full text-xs font-bold text-ferrex-text-muted mt-2">Ver todas sin filtrar</button>
 </div></div></div>
 
-<!-- MODAL LOGIN FERRETERÍA -->
-<div id="loginModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('loginModal')"></div>
-<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="loginForm" class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-sm space-y-2" onsubmit="login(event)">
+<!-- Cargar app.js -->
+<script src="app.js"></script>
+</body>
+</html>
 <button type="button" onclick="closeModal('loginModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
 <h3 class="font-black text-lg text-ferrex-text">🔐 Entrar como ferretería</h3>
 <input name="identifier" required inputmode="numeric" placeholder="Celular registrado (9XX XXX XXX)" class="input-dark w-full rounded-xl px-3 py-2 text-sm">

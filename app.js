@@ -41,6 +41,7 @@ function paintLoc() {
   const r = $('#locRef'); if (r && loc && loc.ref) r.value = loc.ref;
 }
 function openLoc() { paintLoc(); openModal('locModal'); }
+window.openLoc = openLoc; // Exponer en global scope para onclick inline
 function useGPS() {
   if (!('geolocation' in navigator)) { toast('Tu equipo no soporta GPS, elige tu distrito 👇'); $('#locDistrito')?.focus(); return; }
   const btn = $('#gpsBtn'); btn.disabled = true; btn.textContent = '📡 Obteniendo ubicación…';
@@ -94,6 +95,7 @@ function openModal(id) {
     document.body.style.overflow = 'hidden'; 
   } 
 }
+window.openModal = openModal; // Exponer en global scope para onclick inline
 
 function closeModal(id) { 
   const el = $('#' + id); 
@@ -125,8 +127,13 @@ async function api(path, opts = {}) {
     if (!r.ok || j.ok === false) throw new Error(j.error || ('Error ' + r.status));
     return { ok: true, data: j };
   } catch (err) {
-    // Modo demo silencioso - no lanzar error, retornar flag
-    console.debug('API unavailable (demo mode):', err.message);
+    console.warn('API no disponible, usando modo demo:', err.message);
+    // Mostrar estado de conexión
+    const statusEl = document.getElementById('apiStatus');
+    if (statusEl) {
+      statusEl.textContent = '🔄 Modo Local / Demo (sin conexión)';
+      statusEl.className = 'text-xs text-yellow-400';
+    }
     return { ok: false, error: err.message, demo: true };
   } finally {
     // Cleanup timeout if fetch completed before abort
@@ -280,6 +287,8 @@ function setMode(m) {
   $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
   if (!c) { loadOrders(); startRealtime(); } else stopRealtime();
 }
+window.setMode = setMode; // Exponer en global scope para onclick inline
+
 function ftab(t) {
   $('#fPed').classList.toggle('hidden', t !== 'ped');
   $('#fStk').classList.toggle('hidden', t !== 'stk');
@@ -960,82 +969,93 @@ function renderStock() {
 /* ---------- INVENTARIO MANAGEMENT ---------- */
 async function loadInventory() {
   if (!AT) { needAuth(() => openModal('invModal')); return; }
-  // Estado inicial: siempre mostrar botón de agregar producto para admin
-  $('#invList').innerHTML = `
-    <div class="text-center py-12">
-      <p class="text-ferrex-text-dim text-lg mb-4">📦 Cargando inventario...</p>
-      <button onclick="scrollToNewProduct()" class="btn-primary bg-ferrex-neon text-white py-2 rounded-xl">+ Agregar producto</button>
-    </div>`;
-
+  $('#invList').innerHTML = '<p class="text-ferrex-text-dim text-center py-4">Cargando inventario…</p>';
+  
   let demoProducts = [];
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   const storeProducts = demoProducts.filter(p => p.store_id === storeId);
-
-  // Fetch con retry (3 intentos, 8s timeout cada uno)
+  
+  // Fetch with retry (3 attempts, 8s timeout each) + exponential backoff
   let apiProducts = [];
+  
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const apiResult = await fetch(apiURL('/products?store_id=' + storeId), { signal: controller.signal });
+      const apiResult = await fetch(apiURL(`/products?store_id=${storeId}`), { signal: controller.signal });
       clearTimeout(timeoutId);
       if (apiResult.ok) {
         const data = await apiResult.json();
         if (data.ok) {
           apiProducts = data.data || [];
-          break;
+          break; // Success, exit retry loop
         }
-        throw new Error('HTTP ' + apiResult.status);
+        throw new Error(`HTTP ${apiResult.status}`);
       } else {
-        throw new Error('HTTP ' + apiResult.status);
+        throw new Error(`HTTP ${apiResult.status}`);
       }
     } catch (err) {
-      console.warn('API products attempt ' + attempt + '/3 failed:', err.message);
+      console.warn(`API products attempt ${attempt}/3 failed:`, err.message);
       if (attempt === 3) {
-        console.warn('All retries failed, using localStorage only');
+        console.warn('All retries failed, using localStorage only:', err.message);
         apiProducts = [];
       } else {
+        // Wait before retry (exponential backoff)
         await new Promise(r => setTimeout(r, 1000 * attempt));
-      }
+closeModal('invModal');
+      loadInventory();
     }
   }
-
+}
+  
   const allProducts = [...apiProducts, ...storeProducts];
-
+  
   if (!allProducts.length) {
     $('#invList').innerHTML = `
       <div class="text-center py-12">
         <p class="text-ferrex-text-dim text-lg mb-4">📦 Aún no tienes productos en tu catálogo</p>
-        <button onclick="scrollToNewProduct()" class="btn-primary bg-ferrex-neon text-white py-2 rounded-xl">+ Agregar producto</button>
+        <button onclick="scrollToNewProduct()" style="background-color: #17FF00; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">+ Agregar producto</button>
       </div>`;
     return;
   }
-
+  
   $('#invList').innerHTML = allProducts.map(p => `
     <div class="inv-product-row" data-id="${p.id}">
       <div class="inv-product-header">
         <div>
           <span class="font-bold text-ferrex-text">${esc(p.nombre)}</span>
-          <span class="text-xs text-ferrex-text-dim ml-2">${esc(p.categoria || '')}</span>
+          <span class="text-xs text-ferrex-text-dim ml-2">${esc(p.categoria)}</span>
           ${p.codigo ? `<span class="text-xs text-ferrex-text-dim ml-2">SKU: ${esc(p.codigo)}</span>` : ''}
         </div>
         <span class="stock-badge ${p.stock ? 'in-stock' : 'out-stock'}">${p.stock ? 'HAY' : 'SIN STOCK'}</span>
       </div>
       <div class="inv-product-fields">
-        <div class="flex gap-2">
-          <button onclick="addCart(${p.id})" class="flex-1 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
+        <div>
+          <label class="text-xs text-ferrex-text-dim">Precio S/</label>
+          <input type="number" step="0.10" min="0.1" value="${p.precio}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'precio', this.value)">
+        </div>
+        <div>
+          <label class="text-xs text-ferrex-text-dim">Stock</label>
+          <input type="number" min="0" value="${p.stock_qty || p.stock_count || 0}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'stock_qty', this.value)">
+        </div>
+        <div class="full-width">
+          <label class="text-xs text-ferrex-text-dim">Precio Oferta S/</label>
+          <input type="number" step="0.10" min="0" value="${p.precioOferta || ''}" placeholder="Opcional" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'precioOferta', this.value)">
+        </div>
+        <div class="full-width">
+          <label class="text-xs text-ferrex-text-dim">Código / SKU</label>
+          <input type="text" value="${p.codigo || ''}" placeholder="SKU-001" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'codigo', this.value)">
         </div>
       </div>
-      <div class="inv-product-fields">
-        <div class="flex gap-2 pt-2">
-          <button onclick="toggleInventoryStock(${p.id})" class="btn-secondary py-2">${p.stock ? 'Sin Stock' : 'Disponible'}</button>
-          <button onclick="editInventoryProduct(${p.id})" class="btn-outline py-2">Editar</button>
-          <button onclick="deleteInventoryProduct(${p.id})" class="btn-secondary py-2 bg-ferrex-danger border-ferrex-danger">Eliminar</button>
-        </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="toggleInventoryStock(${p.id}, ${!p.stock})" class="flex-1 btn-secondary py-2 text-sm">${p.stock ? 'Marcar Sin Stock' : 'Marcar Disponible'}</button>
+        <button onclick="editInventoryProduct(${p.id})" class="btn-outline py-2 text-sm">Editar</button>
+        <button onclick="deleteInventoryProduct(${p.id})" class="btn-secondary py-2 text-sm bg-ferrex-danger border-ferrex-danger">Eliminar</button>
       </div>
     </div>`).join('');
 }
 
+/* Funciones de inventario */
 async function addInventoryProduct(e) {
   e.preventDefault();
   if (!AT) { needAuth(() => openModal('invModal')); return; }
