@@ -127,7 +127,7 @@ async function api(path, opts = {}) {
     if (!r.ok || j.ok === false) throw new Error(j.error || ('Error ' + r.status));
     return { ok: true, data: j };
   } catch (err) {
-    console.warn('API no disponible, usando modo demo:', err.message);
+    // Mostrar estado de conexión (sin log detallado)
     // Mostrar estado de conexión
     const statusEl = document.getElementById('apiStatus');
     if (statusEl) {
@@ -220,9 +220,6 @@ async function init() {
     healthCheckInterval = setInterval(async () => {
       try {
         await fetch(apiURL('/health'), { method: 'GET', cache: 'no-cache' });
-        console.debug('🏓 Health check ping sent');
-      } catch (err) {
-        console.debug('Health check ping failed:', err.message);
       }
     }, 4 * 60 * 1000); // Ping cada 4 minutos para mantener Render despierto
   }
@@ -243,7 +240,7 @@ async function init() {
         const data = await res.json();
         if (res.ok) return { ok: true, data };
       } catch (err) {
-        console.debug(`Health check attempt ${i + 1} failed:`, err.message);
+        // Intento de recompensa fallido
         if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
 }
 }
@@ -423,7 +420,7 @@ async function login(e) {
     setMode('f');
   } catch (err) {
     // 2. Fallback: buscar en localStorage demo stores
-    console.warn('API login falló, probando localStorage:', err.message);
+    // 2. Fallback: buscar en localStorage demo stores
     
     let demoStores = [];
     try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
@@ -594,7 +591,7 @@ async function saveStore(e) {
     loadProducts();
   } catch (err) {
     // Fallback localStorage para modo demo
-    console.warn('API no disponible, guardando localmente:', err.message);
+    // 2. Fallback localStorage para modo demo
     
     const demoStore = {
       id: Date.now(),
@@ -820,7 +817,7 @@ async function sendOrder() {
       })
       .catch(err => {
         // Silencioso: modo demo
-        console.debug('API order save failed (demo mode):', err.message);
+        // Silenciósamente en modo demo
       });
     
   } finally {
@@ -846,7 +843,7 @@ async function toggleStock(id, val) {
     await apiAuth(`/products/${id}`, 'PATCH', { stock: newStock });
   } catch (err) {
     // 2. Fallback localStorage demo - SILENCIOSO
-    console.debug('API stock toggle falló, actualizando localStorage:', err.message);
+    // Fallback localStorage demo - SILENCIOSO
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
     const idx = demoProducts.findIndex(p => p.id === id);
@@ -925,7 +922,7 @@ async function saveProduct(e) {
     toast('Producto publicado ✅');
   } catch (err) {
     // 2. Fallback localStorage para modo demo
-    console.warn('API no disponible, guardando localmente:', err.message);
+    // 2. Fallback localStorage para modo demo
     
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
@@ -1006,9 +1003,9 @@ async function loadInventory() {
         throw new Error(`HTTP ${apiResult.status}`);
       }
     } catch (err) {
-      console.warn(`API products attempt ${attempt}/3 failed:`, err.message);
+      // Intento ${attempt}/3 fallido
       if (attempt === 3) {
-        console.warn('All retries failed, using localStorage only:', err.message);
+        console.warn('Usando localStorage solo debido a fallos en la API'); 
         apiProducts = [];
       } else {
         // Wait before retry (exponential backoff)
@@ -1122,7 +1119,7 @@ async function addInventoryProduct(e) {
     if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
     toast('Producto agregado ✅');
   } catch (err) {
-    console.warn('API no disponible, guardando localmente:', err.message);
+    // 2. Fallback localStorage para modo demo
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
     demoProducts.push(productData);
@@ -1307,7 +1304,7 @@ async function loadSuperAdminData() {
         </tr>`}).join('') || '<tr><td colspan="7" class="text-center py-4 text-ferrex-text-dim">No hay ferreterías registradas</td>';
     }
   } catch (err) {
-    console.error('Error loading superadmin data:', err);
+    // Error al cargar datos de SuperAdmin
     toast('Error cargando datos de SuperAdmin');
   }
 }
@@ -1364,8 +1361,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🔍 Registrar Service Worker (PWA offline)
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('[FERREX] SW registrado:', reg.scope))
-      .catch(err => console.warn('[FERREX] SW registro falló:', err));
+      // SW registrado correctamente
   }
 
   try {
