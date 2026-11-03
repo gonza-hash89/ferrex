@@ -252,14 +252,13 @@ async function init() {
   const healthResult = await checkHealthWithRetry();
   if (healthResult.ok) {
     const h = healthResult.data;
-    $('#apiStat').innerHTML = `● API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'} · <button onclick="configAPI()" class="underline">⚙️ cambiar backend</button>`;
+    $('#apiStat').innerHTML = `• API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'}`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
     localStorage.removeItem('ga_demo_mode');
     startHealthCheckPing(); // Iniciar ping en segundo plano
   } else {
     // API no disponible - modo demo silencioso, NO mostrar error rojo
-    localStorage.setItem('ga_demo_mode', '1');
-    $('#apiStat').innerHTML = `○ Modo offline (localStorage) · <button onclick="configAPI()" class="underline">⚙️ configurar API</button> · <button onclick="location.reload()" class="underline ml-2">Reintentar</button>`;
+    $('#apiStat').innerHTML = `• Modo offline (localStorage)`;
     $('#apiStat').className = 'text-center text-[11px] py-1 bg-amber-900/50 text-amber-200';
     stopHealthCheckPing(); // Detener ping si API no disponible
   }
