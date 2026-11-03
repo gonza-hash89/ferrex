@@ -326,7 +326,19 @@ async function loadStores() {
   $('#storeSel').innerHTML = stores.map(s => {
     const d = s.distance_km != null ? ` · a ${s.distance_km} km (~${s.eta_min} min)` : '';
     const st = s.abierto_ahora === false ? ' · 🔴 Cerrado' : '';
-    const demoBadge = demoStores.some(ds => ds.id === s.id) ? ' · 🧪 Demo' : '';
+  // Deduplicar ferreterías por ID (evitar registros duplicados)
+  const storeIds = new Set();
+  const uniqueStores = [];
+  stores.forEach(s => {
+    if (!storeIds.has(s.id)) {
+      storeIds.add(s.id);
+      uniqueStores.push(s);
+    }
+  });
+  stores = uniqueStores;
+
+  // Eliminar etiqueta "📝 Demo" del selector
+  const demoBadge = demoStores.some(ds => ds.id === s.id) ? ' · 🧪 Demo' : '';
     return `<option value="${s.id}" ${s.id === storeId ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito)}${d}${st}${demoBadge}</option>`;
   }).join('');
   paintSession();
