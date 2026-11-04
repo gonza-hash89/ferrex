@@ -363,7 +363,7 @@ tailwind.config = {
 <script src="app.js"></script>
 </body>
 </html>
-<div class="absolute inset-0 grid place-items-center p-4 overflow-auto"><form id="storeForm" class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-2 relative" onsubmit="saveStore(event)">
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto hidden"><form id="storeForm" class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-2 relative" onsubmit="saveStore(event)">
 <button type="button" onclick="closeModal('storeModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
 <h3 class="font-black text-lg text-ferrex-text">🏪 Registrar mi ferretería</h3>
 <input name="nombre" required minlength="3" maxlength="80" placeholder="Nombre: Ferretería Los Alisos" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
