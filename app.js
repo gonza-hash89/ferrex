@@ -103,6 +103,7 @@ function closeModal(id) {
     el.classList.add('hidden'); 
     el.style.display = 'none'; 
     document.body.style.overflow = ''; 
+    document.body.style.scrollBehavior = ''; 
   } 
 }
 
