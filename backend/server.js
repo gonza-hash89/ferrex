@@ -145,6 +145,21 @@ function normalizeWhatsapp(v) {
   if (/^51(9\d{8})$/.test(d)) return d;
   return null;
 }
+
+// Construye el mensaje de WhatsApp para un pedido
+function buildWhatsAppMessage(pedido, store) {
+  const items = Array.isArray(pedido.items) ? pedido.items : [];
+  const itemsText = items.map(i => `• ${i.qty}x ${i.nombre} - S/ ${Number(i.price || 0).toFixed(2)}`).join('\n');
+  const esDelivery = pedido.delivery === 'delivery';
+  const deliveryText = esDelivery
+    ? `🚚 Delivery a: ${pedido.address || 'Dirección no especificada'}`
+    : `🏪 Recojo en tienda${pedido.pickupName ? ` - Quien recoge: ${pedido.pickupName}` : ''}`;
+  const pay = pedido.pay || pedido.pago || 'Efectivo';
+  const subtotal = Number(pedido.subtotal || 0);
+  const shipping = Number(pedido.shipping != null ? pedido.shipping : pedido.envio_costo || 0);
+  const total = Number(pedido.total || 0);
+  return `📋 *Nuevo Pedido ${pedido.codigo || pedido.code || ''}*\n${itemsText}\n${deliveryText}\n💳 Pago: ${pay}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n🚚 Envío: S/ ${shipping.toFixed(2)}\n*Total a pagar: S/ ${total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
+}
 function sendError(res, status, message, details) {
   return res.status(status).json({ ok: false, error: message, ...(details ? { details } : {}) });
 }
@@ -382,6 +397,16 @@ app.patch('/api/stores/:id', requireStoreAuth, async (req, res) => {
 });
 
 // ================= PRODUCTOS =================
+app.get('/api/stores', async (req, res) => {
+  try {
+    const { distrito } = req.query;
+    const stores = await dbServices.listFerreteriasPublicas({ zona: distrito });
+    res.json(stores);
+  } catch (err) {
+    sendError(res, 500, 'Error cargando ferreterías');
+  }
+});
+
 app.get('/api/products', async (req, res) => {
   try {
     const { store_id, q, cat, only_stock } = req.query;
@@ -416,8 +441,8 @@ app.post('/api/products', requireStoreAuth, uploadLimiter, upload.single('foto')
       nombre: nombre.trim(),
       precio: parseFloat(precio),
       categoria,
-      stock_qty: parseInt(req.body.stock_qty) || 0,
-      precio_oferta: req.body.precio_oferta ? parseFloat(req.body.precio_oferta) : null,
+      stock_qty: parseInt(req.body.stock_qty ?? req.body.stock) || 0,
+      precio_oferta: (req.body.precioOferta ?? req.body.precio_oferta) ? parseFloat(req.body.precioOferta ?? req.body.precio_oferta) : null,
       categoria_enum: req.body.categoria_enum,
       foto_base64: fotoBase64
     });
@@ -528,7 +553,7 @@ app.get('/api/orders', async (req, res) => {
     if (store_id) {
       orders = await dbServices.getPedidosByFerreteria(store_id, status);
     } else {
-      orders = await dbServices.getAllPedidos({ status, limit: limit ? parseInt(limit) : 50 });
+      orders = await dbServices.getAllPedidos({ estado: status, limit: limit ? parseInt(limit) : 50 });
     }
     res.json(orders);
   } catch (err) {
@@ -600,8 +625,8 @@ app.post('/api/inventory', requireStoreAuth, uploadLimiter, upload.single('foto'
       nombre: req.body.nombre?.trim(),
       precio: parseFloat(req.body.precio),
       categoria: req.body.categoria,
-      stock_qty: parseInt(req.body.stock_qty) || 0,
-      precio_oferta: req.body.precio_oferta ? parseFloat(req.body.precio_oferta) : null,
+      stock_qty: parseInt(req.body.stock_qty ?? req.body.stock) || 0,
+      precio_oferta: (req.body.precioOferta ?? req.body.precio_oferta) ? parseFloat(req.body.precioOferta ?? req.body.precio_oferta) : null,
       categoria_enum: req.body.categoria,
       foto_base64: fotoBase64
     });
@@ -653,7 +678,7 @@ app.post('/api/admin/login', authLimiter, vLogin, checkValidation, async (req, r
     
     const token = jwt.sign({ aid: admin.id, type: 'superadmin' }, JWT_KEY, { expiresIn: '8h' });
     res.cookie('admin_session', token, { httpOnly: true, secure: IS_HTTPS, sameSite: IS_HTTPS ? 'none' : 'lax', maxAge: 8 * 60 * 60 * 1000, path: '/' });
-    res.json({ ok: true, admin: { id: admin.id, email: admin.email, nombre: admin.nombre } });
+    res.json({ ok: true, token, admin: { id: admin.id, email: admin.email, nombre: admin.nombre } });
   } catch (err) {
     sendError(res, 500, 'Error en login admin');
   }
@@ -678,7 +703,7 @@ app.get('/api/admin/orders', requireSuperAdminAuth, async (req, res) => {
   try {
     const { status, limit, ferreteria_id } = req.query;
     const orders = await dbServices.getAllPedidos({ 
-      status, 
+      estado: status, 
       limit: limit ? parseInt(limit) : 100,
       ferreteria_id 
     });
@@ -712,13 +737,16 @@ app.post('/api/admin/commission', requireSuperAdminAuth, async (req, res) => {
 app.post('/api/admin/commissions/calculate', requireSuperAdminAuth, async (req, res) => {
   try {
     const ferreterias = await dbServices.getAllFerreterias();
-    const rate = 0.15; // Default 15%
+    const ratePct = Number(req.body?.rate);
+    const rate = (Number.isFinite(ratePct) && ratePct >= 0 && ratePct <= 100 ? ratePct : 15) / 100;
     let totalCommission = 0;
-    for (const f of ferreterias) {
+    const detalle = ferreterias.map(f => {
       const revenue = Number(f.total_sales || 0);
-      totalCommission += revenue * rate;
-    }
-    res.json({ ok: true, total_commission: totalCommission });
+      const commission = revenue * rate;
+      totalCommission += commission;
+      return { id: f.id, nombre: f.nombre, revenue, commission };
+    });
+    res.json({ ok: true, rate: rate * 100, total_commission: totalCommission, detalle });
   } catch (err) {
     sendError(res, 500, 'Error calculando comisiones');
   }

@@ -15,19 +15,53 @@ function generateOrderCode() {
 // ==================== FERRETERÍAS ====================
 async function createFerreteria(data) {
   const {
-    nombre, ruc_dni, zona, telefono, whatsapp, direccion,
+    nombre, ruc_dni, telefono, whatsapp, direccion,
     lat, lng, password, apertura, cierre, dias_atencion
   } = data;
-  
+  // La columna en BD es `zona`; la API pública usa `distrito`
+  const zona = data.zona || data.distrito || null;
+  const logo_url = data.logo_url || data.logo || null;
+
   const passwordHash = await bcrypt.hash(password, 12);
-  
+
   const result = await db.query(`
-    INSERT INTO ferreterias (nombre, ruc_dni, zona, telefono, whatsapp, direccion, lat, lng, password_hash, apertura, cierre, dias_atencion)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    INSERT INTO ferreterias (nombre, ruc_dni, zona, telefono, whatsapp, direccion, lat, lng, password_hash, apertura, cierre, dias_atencion, logo_url)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
     RETURNING *
-  `, [nombre, ruc_dni, zona, telefono, whatsapp, direccion, lat, lng, passwordHash, apertura, cierre, dias_atencion]);
-  
+  `, [nombre, ruc_dni || null, zona, telefono, whatsapp, direccion, lat, lng, passwordHash, apertura, cierre, dias_atencion, logo_url]);
+
   return result.rows[0];
+}
+
+// Lista pública de ferreterías (mapea columnas BD -> contrato del frontend)
+async function listFerreteriasPublicas({ zona } = {}) {
+  const params = [];
+  let where = '';
+  if (zona) { params.push(zona); where = 'WHERE zona = $1'; }
+  const result = await db.query(`SELECT * FROM ferreterias ${where} ORDER BY nombre`, params);
+  return result.rows.map(mapFerreteriaPublica);
+}
+
+function mapFerreteriaPublica(f) {
+  if (!f) return f;
+  return {
+    id: f.id,
+    nombre: f.nombre,
+    ruc_dni: f.ruc_dni,
+    distrito: f.zona,
+    zona: f.zona,
+    direccion: f.direccion,
+    telefono: f.telefono,
+    whatsapp: f.whatsapp,
+    abierta: f.abierta,
+    abierto_ahora: f.abierta !== false,
+    apertura: f.apertura,
+    cierre: f.cierre,
+    dias_atencion: f.dias_atencion,
+    lat: f.lat,
+    lng: f.lng,
+    logo_url: f.logo_url
+  };
 }
 
 async function getFerreteriaById(id) {
@@ -166,25 +200,57 @@ async function createPedido(data) {
   const codigo = generateOrderCode();
   const {
     ferreteria_id, items, subtotal, envio_costo, total,
-    pago, delivery, address, pickup_name, client_zone, cliente_nombre, cliente_telefono
+    cliente_nombre, cliente_telefono, address, delivery
   } = data;
-  
+  // Aceptar ambos nombres de campo (camelCase desde la API / snake_case interno)
+  const pago = data.pago || data.pay || 'Efectivo';
+  const pickup_name = data.pickup_name || data.pickupName || null;
+  const client_zone = data.client_zone || data.clientZone || null;
+
   const result = await db.query(`
-    INSERT INTO pedidos (codigo, ferreteria_id, cliente_nombre, cliente_telefono, cliente_direccion, cliente_zona, items, subtotal, envio_costo, total, pago, delivery, pickup_name, cliente_zona)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+    INSERT INTO pedidos (codigo, ferreteria_id, cliente_nombre, cliente_telefono, cliente_direccion, items, subtotal, envio_costo, total, pago, delivery, pickup_name, cliente_zona)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
     RETURNING *
   `, [
-    codigo, ferreteria_id, data.cliente_nombre || null, data.cliente_telefono || null,
-    address, null, JSON.stringify(items), subtotal, data.envio_costo || 0,
-    total, pago, delivery, pickup_name, JSON.stringify(client_zone)
+    codigo, ferreteria_id, cliente_nombre || null, cliente_telefono || null,
+    address, JSON.stringify(items), subtotal, envio_costo || 0,
+    total, pago, delivery, pickup_name, client_zone ? JSON.stringify(client_zone) : null
   ]);
-  
-  return result.rows[0];
+
+  return mapPedido(result.rows[0]);
+}
+
+// Mapea una fila de BD al contrato que usa el frontend
+function mapPedido(p) {
+  if (!p) return p;
+  const n = v => (v === null || v === undefined ? v : Number(v));
+  return {
+    ...p,
+    code: p.codigo,
+    codigo: p.codigo,
+    store_id: p.ferreteria_id,
+    ferreteria_id: p.ferreteria_id,
+    subtotal: n(p.subtotal),
+    shipping: n(p.envio_costo),
+    envio_costo: n(p.envio_costo),
+    total: n(p.total),
+    pay: p.pago,
+    pago: p.pago,
+    address: p.cliente_direccion,
+    cliente_direccion: p.cliente_direccion,
+    pickupName: p.pickup_name,
+    pickup_name: p.pickup_name,
+    clientZone: p.cliente_zona,
+    status: p.estado,
+    estado: p.estado,
+    created_at: p.creado_en,
+    creado_en: p.creado_en
+  };
 }
 
 async function getPedidoById(id) {
   const result = await db.query('SELECT * FROM pedidos WHERE id = $1', [id]);
-  return result.rows[0];
+  return mapPedido(result.rows[0]);
 }
 
 async function getPedidosByFerreteria(ferreteriaId, estado = null) {
@@ -198,7 +264,7 @@ async function getPedidosByFerreteria(ferreteriaId, estado = null) {
   query += ' ORDER BY creado_en DESC';
   
   const result = await db.query(query, params);
-  return result.rows;
+  return result.rows.map(mapPedido);
 }
 
 async function getAllPedidos(filters = {}) {
@@ -237,14 +303,14 @@ async function getAllPedidos(filters = {}) {
   }
   
   const result = await db.query(query, params);
-  return result.rows;
+  return result.rows.map(mapPedido);
 }
 
 async function updatePedidoEstado(id, estado) {
   const result = await db.query(`
     UPDATE pedidos SET estado = $1, actualizada_en = NOW() WHERE id = $2 RETURNING *
   `, [estado, id]);
-  return result.rows[0];
+  return mapPedido(result.rows[0]);
 }
 
 async function getPedidosStats(ferreteriaId = null) {
@@ -338,6 +404,8 @@ module.exports = {
   verifyFerreteriaPassword,
   getFerreteriasByZona,
   getAllFerreterias,
+  listFerreteriasPublicas,
+  mapFerreteriaPublica,
   createProducto,
   getProductosByFerreteria,
   getProductoById,

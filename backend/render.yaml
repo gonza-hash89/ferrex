@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node db/migrate.js && node server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -27,6 +27,4 @@ services:
         value: https://ferrex-pe.netlify.app
       - key: ACCESS_TTL
         value: 15m
-      - key: DATABASE_URL
-        sync: false
     autoDeploy: true

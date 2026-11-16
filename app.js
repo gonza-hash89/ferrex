@@ -10,7 +10,7 @@ const ENV_API = (typeof __VITE_API_URL__ !== 'undefined' ? __VITE_API_URL__ : ''
 const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 'https://ferrex-vdex.onrender.com').replace(/\/$/, '');
 function apiURL(p) { return API_BASE + '/api' + p; }
 let activeCat = 'Todo', pay = 'Efectivo';
-let storeId = Number(localStorage.getItem('ga_store') || 1);
+let storeId = localStorage.getItem('ga_store') || 1;
 let soundOn = localStorage.getItem('ga_sound') !== 'off';
 let seenOrders = new Set(), es = null, pollTimer = null, audioCtx = null;
 const CATS = ['Todo', 'Electricidad', 'Gasfitería', 'Fijaciones', 'Herramientas', 'Pinturas', 'Candados'];
@@ -120,8 +120,11 @@ document.addEventListener('pointerdown', unlockAudio, { once: true });
 async function api(path, opts = {}) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const r = await fetch(apiURL(path), { ...opts, signal: controller.signal });
+    const timeout = opts.timeout || 8000;
+    const fetchOpts = { ...opts };
+    delete fetchOpts.timeout;
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const r = await fetch(apiURL(path), { ...fetchOpts, signal: controller.signal });
     clearTimeout(timeoutId);
     let j = null; 
     try { j = await r.json(); } catch { throw new Error('Respuesta inválida del servidor'); }
@@ -345,7 +348,16 @@ async function loadStores() {
   paintSession();
   window._all = null; loadProducts();
 }
-function onStoreChange() { storeId = Number($('#storeSel').value); localStorage.setItem('ga_store', storeId); window._all = null; metaForStore(stores.find(s => s.id === storeId)); loadProducts(); if ($('#vFer').classList.contains('active')) { loadOrders(); startRealtime(); } }
+function onStoreChange() {
+  const val = $('#storeSel').value;
+  const st = stores.find(s => String(s.id) === String(val));
+  storeId = st ? st.id : val;
+  localStorage.setItem('ga_store', storeId);
+  window._all = null;
+  metaForStore(stores.find(s => String(s.id) === String(storeId)));
+  loadProducts();
+  if ($('#vFer').classList.contains('active')) { loadOrders(); startRealtime(); }
+}
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 /* ---------- Sesión ferretera (JWT en memoria + refresh httpOnly) ---------- */
 // El refresh vive en cookie httpOnly (inaccesible a JS/XSS); el access de 15 min
@@ -753,81 +765,104 @@ async function sendOrder() {
   const t = totals();
   if (t.n === 0) { toast('Carrito vacío 🛒'); return; }
   if (!$('#consent')?.checked) { toast('Aceptá las Políticas y Términos para confirmar ☑️'); $('#consent')?.focus(); return; }
-  
+
   // Obtener tienda actual (API + demo)
-  const store = stores.find(s => s.id === storeId) || 
+  const store = stores.find(s => s.id === storeId) ||
     JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').find(s => s.id === storeId);
-  
+
   if (!store) {
     toast('No hay ferretería seleccionada');
     return;
   }
-  
+
   // Obtener teléfono de la tienda
   const rawPhone = store.whatsapp || store.telefono || store.celular;
   const phone = normalizePhone(rawPhone);
-  
+
   if (!phone) {
-    toast('La ferretería no tiene teléfono/WhasApp configurado');
+    toast('La ferretería no tiene teléfono/WhatsApp configurado');
     return;
   }
-  
-  // Construir mensaje y URL de WhatsApp LOCALMENTE
-  const message = buildWhatsAppMessage(t, store);
-  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-  
-  const btn = $('#sendBtn'); 
-  btn.disabled = true; 
-  btn.textContent = 'Abriendo WhatsApp…';
-  
-  try {
-    // 1. Abrir WhatsApp INMEDIATAMENTE (frontend-first)
-    window.open(whatsappUrl, '_blank');
-    toast('Abriendo WhatsApp… 📲');
-    
-    // 2. Mostrar confirmación en UI
-    $('#orderOk').classList.remove('hidden');
-    $('#okCode').textContent = `Pedido FERREX-${Date.now().toString().slice(-6)}`;
-    $('#okTxt').textContent = `${t.n} productos · ${t.del ? 'Delivery' : 'Recojo'} · ${pay} · Total ${money(t.total)}`;
-    const a = $('#waCta');
-    a.href = whatsappUrl;
-    a.classList.remove('hidden');
-    window._lastWa = message;
-    
-    // 3. Limpiar carrito
-    cart = {}; 
-    renderCart();
-    
-    // 4. Guardar en API EN BACKGROUND (no bloquea)
-    const body = {
-      store_id: storeId, 
-      items: Object.entries(cart).map(([id, q]) => { 
-        const p = all.find(x => x.id == id); 
-        return { product_id: Number(id), nombre: p?.nombre || 'Producto', qty: q, price: p?.precio || 0 }; 
-      }), 
-      total: t.total, pay,
-      address: $('#addr').value.trim(),
-      pickupName: $('#pickupName').value.trim(),
-      delivery: t.del ? 'delivery' : 'recojo',
-      clientZone: getLoc()
+
+  // ⚠️ Snapshot del carrito ANTES de vaciarlo (fix: antes se vaciaba primero)
+  const all = [...products, ...(window._all || [])];
+  const items = Object.entries(cart).map(([id, q]) => {
+    const p = all.find(x => x.id == id);
+    return {
+      product_id: Number(id),
+      nombre: p?.nombre || 'Producto',
+      qty: q,
+      price: p?.precio_oferta || p?.precio || 0
     };
-    
-    // Fire-and-forget: intentar guardar en API, pero no bloquear
-    api('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(o => {
-        // Si API responde, actualizar código de pedido
-        $('#okCode').textContent = `Pedido ${o.code}`;
-        window._lastWa = o.whatsapp_message || message;
-      })
-      .catch(err => {
-        // Silencioso: modo demo
-        console.debug('API order save failed (demo mode):', err.message);
-      });
-    
-  } finally {
-    btn.disabled = false; 
-    btn.textContent = 'Confirmar pedido por WhatsApp →';
+  });
+  if (!items.length) { toast('Carrito vacío 🛒'); return; }
+
+  // Mensaje local de respaldo (se construye con el carrito aún intacto)
+  const localMessage = buildWhatsAppMessage(t, store);
+  const localWhatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(localMessage)}`;
+
+  const body = {
+    store_id: storeId,
+    items,
+    total: t.total,
+    pay,
+    address: $('#addr').value.trim(),
+    pickupName: $('#pickupName').value.trim(),
+    delivery: t.del ? 'delivery' : 'recojo',
+    clientZone: getLoc()
+  };
+
+  const btn = $('#sendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando pedido…';
+
+  // 1) Guardar PRIMERO en la base de datos
+  let saved;
+  try {
+    saved = await api('/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      timeout: 30000 // Render free tier: cold start puede tardar
+    });
+  } catch (e) {
+    saved = { ok: false, error: e.message };
   }
+
+  // 2) Determinar código, mensaje y URL (preferimos lo que devolvió el backend)
+  let code, message, whatsappUrl;
+  if (saved && saved.ok && saved.data) {
+    const o = saved.data;
+    code = o.codigo || o.code || ('FERREX-' + Date.now().toString().slice(-6));
+    message = o.whatsapp_message || localMessage;
+    whatsappUrl = o.whatsapp_url || localWhatsappUrl;
+  } else {
+    // Fallback modo demo/Sin conexión: el pedido solo se envía por WhatsApp
+    code = 'FERREX-' + Date.now().toString().slice(-6);
+    message = localMessage;
+    whatsappUrl = localWhatsappUrl;
+    console.debug('Pedido no guardado en BD (modo demo):', saved?.error || 'sin conexión');
+  }
+
+  // 3) Mostrar confirmación en UI
+  $('#orderOk').classList.remove('hidden');
+  $('#okCode').textContent = `Pedido ${code}`;
+  $('#okTxt').textContent = `${t.n} productos · ${t.del ? 'Delivery' : 'Recojo'} · ${pay} · Total ${money(t.total)}`;
+  const a = $('#waCta');
+  a.href = whatsappUrl;
+  a.classList.remove('hidden');
+  window._lastWa = message;
+
+  // 4) Abrir WhatsApp DESPUÉS de guardar
+  window.open(whatsappUrl, '_blank');
+  toast(saved && saved.ok ? 'Pedido guardado ✅ Abriendo WhatsApp…' : 'Abriendo WhatsApp… 📲');
+
+  // 5) Limpiar carrito
+  cart = {};
+  renderCart();
+
+  btn.disabled = false;
+  btn.textContent = 'Confirmar pedido por WhatsApp →';
 }
 
 // Función auxiliar para construir mensaje (compatibilidad con código anterior)
@@ -1273,88 +1308,179 @@ async function setOrder(id, st) {
 
 // ==================== SUPERADMIN FUNCTIONS ====================
 
+// Token de SuperAdmin (memoria + persistencia)
+let adminToken = null;
+try { adminToken = localStorage.getItem('ga_admin_token') || null; } catch {}
+
+function adminHeaders(extra = {}) {
+  return adminToken ? { ...extra, 'x-admin-token': adminToken } : extra;
+}
+
+async function adminApi(path, method = 'GET', body) {
+  const result = await api(path, {
+    method,
+    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    timeout: 30000 // Render free tier puede tardar por cold start
+  });
+  if (!result.ok) throw new Error(result.error || 'Error de API');
+  return result.data;
+}
+
+async function adminLogin(e) {
+  e.preventDefault();
+  const email = $('#adminEmail').value.trim();
+  const password = $('#adminPassword').value;
+  const errEl = $('#adminLoginError');
+  const btn = $('#adminLoginBtn');
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+  try {
+    const res = await api('/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: email, password }),
+      timeout: 30000
+    });
+    if (!res.ok) throw new Error(res.error || 'Credenciales inválidas');
+    adminToken = res.data.token || 'cookie';
+    try { localStorage.setItem('ga_admin_token', adminToken); } catch {}
+    if ($('#adminWho')) $('#adminWho').textContent = res.data.admin?.email || email;
+    showAdminDashboard();
+    await loadSuperAdminData();
+    toast('Bienvenido, SuperAdmin 🔐');
+  } catch (err) {
+    errEl.textContent = '⚠ ' + (err.message || 'No se pudo iniciar sesión');
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar 🔓';
+  }
+}
+
+function showAdminDashboard() {
+  $('#adminLoginBox')?.classList.add('hidden');
+  $('#adminDashboard')?.classList.remove('hidden');
+}
+
+function adminLogout() {
+  adminToken = null;
+  try { localStorage.removeItem('ga_admin_token'); } catch {}
+  $('#adminDashboard')?.classList.add('hidden');
+  $('#adminLoginBox')?.classList.remove('hidden');
+  if ($('#adminPassword')) $('#adminPassword').value = '';
+}
+
 // Cargar datos del SuperAdmin
 async function loadSuperAdminData() {
+  if (!adminToken) return;
   try {
     $('#superAdminStoresList').innerHTML = '<tr><td colspan="7" class="text-center py-4 text-ferrex-text-dim">Cargando…</td>';
-    const [storesRes, statsRes] = await Promise.all([
-      api('/admin/ferreterias'),
-      api('/admin/stats')
-    ]);
-    
-    // Actualizar estadísticas
-    if (statsRes.ok) {
-      const stats = statsRes.data;
+    const stores = await adminApi('/admin/ferreterias');
+    const stats = await adminApi('/admin/stats');
+
+    if (stats) {
       $('#statTotalSales').textContent = money(stats.total_ventas || 0);
       $('#statCompletedOrders').textContent = stats.completados || 0;
       $('#statTotalStores').textContent = stats.total_ferreterias || 0;
     }
-    
-    // Renderizar lista de ferreterías
-    if (storesRes.ok) {
-      const stores = storesRes.data || [];
-      $('#superAdminStoresList').innerHTML = stores.map(s => {
-        const revenue = Number(s.total_sales || 0);
-        const commission = revenue * 0.15;
-        return `<tr class="border-t border-ferrex-border">
-          <td class="px-3 py-2"><b class="text-ferrex-text">${esc(s.nombre)}</b></td>
-          <td class="px-3 py-2 text-xs text-ferrex-text-dim">${esc(s.ruc_dni || '—')}</td>
-          <td class="px-3 py-2 text-xs text-ferrex-text-dim">${esc(s.telefono || '—')}</td>
-          <td class="px-3 py-2 text-center">
-            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${s.abierto !== false ? 'bg-listo text-plomoDark' : 'bg-ferrex-danger text-white'}">${s.abierto !== false ? 'Activo' : 'Inactivo'}</span></td>
-          <td class="px-3 py-2 text-right text-sm text-ferrex-text">${money(revenue)}</td>
-          <td class="text-right px-3 py-2 text-sm text-ferrex-text-dim">${money(revenue * 0.15)}</td>
-          <td class="text-center px-3 py-2 text-xs font-bold text-ferrex-warning">${money(revenue * 0.15)}</td>
-        </tr>`}).join('') || '<tr><td colspan="7" class="text-center py-4 text-ferrex-text-dim">No hay ferreterías registradas</td>';
-    }
+
+    const list = Array.isArray(stores) ? stores : [];
+    const rate = (parseFloat($('#commissionRate')?.value) || 15) / 100;
+    $('#superAdminStoresList').innerHTML = list.map(s => {
+      const revenue = Number(s.total_sales || 0);
+      const commission = revenue * rate;
+      return `<tr class="border-t border-ferrex-border">
+        <td class="px-3 py-2"><b class="text-ferrex-text">${esc(s.nombre)}</b></td>
+        <td class="px-3 py-2 text-xs text-ferrex-text-dim">${esc(s.ruc_dni || '—')}</td>
+        <td class="px-3 py-2 text-xs text-ferrex-text-dim">${esc(s.telefono || '—')}</td>
+        <td class="px-3 py-2 text-center">
+          <span class="px-2 py-0.5 rounded-full text-xs font-bold ${s.abierta !== false ? 'bg-listo text-plomoDark' : 'bg-ferrex-danger text-white'}">${s.abierta !== false ? 'Activo' : 'Inactivo'}</span></td>
+        <td class="px-3 py-2 text-right text-sm text-ferrex-text">${money(revenue)}</td>
+        <td class="text-right px-3 py-2 text-sm text-ferrex-text-dim">${money(commission)}</td>
+        <td class="text-center px-3 py-2 text-xs font-bold text-ferrex-warning">${money(commission)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" class="text-center py-4 text-ferrex-text-dim">No hay ferreterías registradas</td>';
   } catch (err) {
     console.error('Error loading superadmin data:', err);
-    toast('Error cargando datos de SuperAdmin');
+    $('#superAdminStoresList').innerHTML = '<tr><td colspan="7" class="text-center py-4 text-ferrex-danger">Error: ' + esc(err.message) + '</td></tr>';
+    if (/401|admin|autentic|sesi/i.test(err.message)) adminLogout();
   }
 }
 
 // Cargar datos del SuperAdmin al abrir el modal
 function openSuperAdminModal() {
   openModal('superAdminModal');
-  loadSuperAdminData();
+  if (adminToken) {
+    showAdminDashboard();
+    loadSuperAdminData();
+  } else {
+    $('#adminLoginBox')?.classList.remove('hidden');
+    $('#adminDashboard')?.classList.add('hidden');
+  }
 }
 
 // Guardar configuración de comisión
 async function saveCommissionConfig() {
-  const rate = parseFloat($('#commissionRate').val()) || 15;
-  const currency = $('#commissionCurrency').val();
+  const rate = parseFloat($('#commissionRate').value) || 15;
+  const currency = $('#commissionCurrency').value;
   try {
-    await apiAuth('/admin/commission', 'POST', { rate, currency });
+    await adminApi('/admin/commission', 'POST', { rate, currency });
     toast('Configuración de comisión guardada ✅');
+    loadSuperAdminData();
   } catch (e) {
     toast('Error guardando configuración');
   }
 }
 
 function resetCommissionConfig() {
-  $('#commissionRate').val(15);
-  $('#commissionCurrency').val('PEN');
+  $('#commissionRate').value = 15;
+  $('#commissionCurrency').value = 'PEN';
   toast('Configuración restablecida');
 }
 
 async function calculateAllCommissions() {
   try {
-    const res = await apiAuth('/admin/commissions/calculate', 'POST');
-    if (res.ok) {
-      const data = res.data;
-      $('#totalCommissionDue').textContent = money(data.total_commission || 0);
-      toast('Comisiones calculadas ✅');
-      loadSuperAdminData(); // Recargar tabla
-    } else {
-      toast('Error calculando comisiones');
-    }
+    const rate = parseFloat($('#globalCommissionRate')?.value) || parseFloat($('#commissionRate')?.value) || 15;
+    const data = await adminApi('/admin/commissions/calculate', 'POST', { rate });
+    $('#totalCommissionDue').textContent = money(data.total_commission || 0);
+    toast('Comisiones calculadas ✅');
+    loadSuperAdminData(); // Recargar tabla
   } catch (e) {
     toast('Error calculando comisiones');
   }
 }
 
 function exportCommissionsCSV() {
-  toast('Exportación CSV en desarrollo');
+  try {
+    const rows = [['Ferreteria', 'RUC/DNI', 'Telefono', 'Ingresos', 'Comision']];
+    document.querySelectorAll('#superAdminStoresList tr').forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length >= 7) {
+        rows.push([
+          tds[0].innerText.trim(),
+          tds[1].innerText.trim(),
+          tds[2].innerText.trim(),
+          tds[4].innerText.trim(),
+          tds[5].innerText.trim()
+        ]);
+      }
+    });
+    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'comisiones-ferrex-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('CSV exportado ✅');
+  } catch (e) {
+    toast('Error exportando CSV');
+  }
 }
 
 // Initialize app
