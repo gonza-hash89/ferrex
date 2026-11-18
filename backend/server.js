@@ -24,7 +24,7 @@ const { migrate } = require('./db/migrate');
 const app = express();
 app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT || 3001);
-const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+const BASE_URL = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // ---- Pilar 1: secretos centralizados ----
@@ -275,14 +275,20 @@ for (const d of [UPLOAD_DIR]) {
 
 // Health check
 app.get('/api/health', async (req, res) => {
-  let dbOk = false, dbCode = null;
-  if (!process.env.DATABASE_URL) {
+  let dbOk = false, dbCode = null, dbHost = null, schema = false;
+  const rawUrl = process.env.DATABASE_URL || '';
+  if (!rawUrl) {
     dbCode = 'MISSING_DATABASE_URL';
   } else {
-    try { await db.query('SELECT 1'); dbOk = true; }
-    catch (e) { dbCode = e.code || 'DB_ERROR'; }
+    try { dbHost = new URL(rawUrl.replace(/^postgres(ql)?:/, 'http:')).hostname; } catch {}
+    try {
+      await db.query('SELECT 1');
+      dbOk = true;
+      const t = await db.query("SELECT to_regclass('public.ferreterias') AS t");
+      schema = !!t.rows[0].t;
+    } catch (e) { dbCode = e.code || 'DB_ERROR'; }
   }
-  res.json({ ok: true, app: 'FERREX API', version: '2.0.0', baseUrl: BASE_URL, db: dbOk, dbCode });
+  res.json({ ok: true, app: 'FERREX API', version: '2.0.0', baseUrl: BASE_URL, db: dbOk, dbCode, dbHost, schema });
 });
 
 // ================= AUTH FERRETERÍA =================
