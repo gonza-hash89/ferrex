@@ -15,9 +15,19 @@ let soundOn = localStorage.getItem('ga_sound') !== 'off';
 let seenOrders = new Set(), es = null, pollTimer = null, audioCtx = null;
 const CATS = ['Todo', 'Electricidad', 'Gasfitería', 'Fijaciones', 'Herramientas', 'Pinturas', 'Candados'];
 const SHIPPING_RATE = 0.15; // 15% del subtotal
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NEXT = { 'Pendiente': ['Aceptado', 'Rechazado'], 'Aceptado': ['En Camino', 'Listo para recojo', 'Completado'], 'En Camino': ['Completado'], 'Listo para recojo': ['Completado'] };
 const $ = s => document.querySelector(s);
 const money = n => 'S/ ' + Number(n).toFixed(2);
+function priceHtml(p, cls = '') {
+  const base = Number(p?.precio) || 0;
+  const offer = Number(p?.precio_oferta) || 0;
+  const hasOffer = offer > 0 && offer < base;
+  return `<span class="flex items-baseline gap-2 ${cls}">
+    <span class="price-tag text-sm">${money(hasOffer ? offer : base)}</span>
+    ${hasOffer ? `<span class="text-xs line-through text-ferrex-text-muted">${money(base)}</span>` : ''}
+  </span>`;
+}
 
 /* ---------- Ubicación híbrida (GPS + manual), persistida ---------- */
 const LOC_KEY = 'user_location';
@@ -78,11 +88,14 @@ const PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http
 function imgFallback(el) { el.onerror = null; el.src = PLACEHOLDER; }
 function previewImage(input) {
   const file = input.files?.[0];
-  const preview = $('#fotoPrev');
-  if (!file) { preview.classList.add('hidden'); return; }
+  // El formulario de inventario usa #invFotoPrev; el de producto usa #fotoPrev
+  const preview = input.form?.id === 'newProductForm' ? $('#invFotoPrev') : $('#fotoPrev');
+  if (!preview) return;
+  if (!file) { preview.classList.add('hidden'); preview.src = ''; return; }
   if (file.size > 5 * 1024 * 1024) { toast('Imagen > 5MB, elija otra'); input.value = ''; preview.classList.add('hidden'); return; }
   const reader = new FileReader();
   reader.onload = e => { preview.src = e.target.result; preview.classList.remove('hidden'); };
+  reader.onerror = () => toast('No se pudo leer la imagen');
   reader.readAsDataURL(file);
 }
 function absImg(u) { if (!u) return u; return u.startsWith('/') ? API_BASE + u : u; }
@@ -133,10 +146,10 @@ async function api(path, opts = {}) {
   } catch (err) {
     console.warn('API no disponible, usando modo demo:', err.message);
     // Mostrar estado de conexión
-    const statusEl = document.getElementById('apiStatus');
+    const statusEl = document.getElementById('apiStat');
     if (statusEl) {
-      statusEl.textContent = '🔄 Modo Local / Demo (sin conexión)';
-      statusEl.className = 'text-xs text-yellow-400';
+      statusEl.textContent = '• Modo local / demo (sin conexión)';
+      statusEl.className = 'text-center text-[11px] py-1 bg-ferrex-warning/15 text-ferrex-warning font-bold';
     }
     return { ok: false, error: err.message, demo: true };
   } finally {
@@ -210,8 +223,10 @@ function handleDeepLink(extraDistritos = []) {
         `Encuentra accesorios ferreteros con delivery o recojo inmediato en el distrito de ${hit}.`);
     }
   } else {
-    const id = Number(String(m[2]).split('-')[0]);
-    if (Number.isInteger(id) && id > 0) { storeId = id; try { localStorage.setItem('ga_store', id); } catch {} }
+    const raw = decodeURIComponent(String(m[2]));
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
+    const id = isUuid ? raw : raw.split('-')[0];
+    if (id) { storeId = id; try { localStorage.setItem('ga_store', id); } catch {} }
   }
 }
 async function init() {
@@ -262,13 +277,13 @@ async function init() {
     if (healthResult.ok) {
       const h = healthResult.data;
       stat.innerHTML = `• API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'}`;
-      stat.className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
+      stat.className = 'text-center text-[11px] py-1 bg-ferrex-neon text-ferrex-bg-alt font-bold';
       localStorage.removeItem('ga_demo_mode');
       startHealthCheckPing(); // Ping en segundo plano para mantener Render despierto
     } else {
       // API no disponible - modo demo silencioso, NO mostrar error rojo
       stat.innerHTML = `• Modo offline (localStorage)`;
-      stat.className = 'text-center text-[11px] py-1 bg-amber-900/50 text-amber-200';
+      stat.className = 'text-center text-[11px] py-1 bg-ferrex-warning/15 text-ferrex-warning font-bold';
       stopHealthCheckPing();
     }
   })();
@@ -279,12 +294,12 @@ async function init() {
   if (JSON.stringify(getLoc()) !== before) { await loadStores(); await loadProducts(); }
   if (/^\/(tienda|ferreteria)\//.test(location.pathname)) metaForStore(stores.find(s => String(s.id) === String(storeId)));
   if (location.pathname.startsWith('/catalogo')) document.getElementById('grid')?.scrollIntoView();
-  $('#storeForm [name=logo]').addEventListener('change', e => {
+  $('#storeForm [name=logo]')?.addEventListener('change', e => {
     const f = e.target.files[0]; if (!f) return;
     if (f.size > 5 * 1024 * 1024) { toast('Logo > 5MB, elige otra imagen'); e.target.value = ''; return; }
     $('#logoPrev').src = URL.createObjectURL(f); $('#logoPrev').classList.remove('hidden');
   });
-  $('#prodForm [name=foto]').addEventListener('change', e => {
+  $('#prodForm [name=foto]')?.addEventListener('change', e => {
     const f = e.target.files[0]; if (!f) return;
     if (f.size > 5 * 1024 * 1024) { toast('Foto > 5MB, elige otra'); e.target.value = ''; return; }
     $('#fotoPrev').src = URL.createObjectURL(f); $('#fotoPrev').classList.remove('hidden');
@@ -292,29 +307,50 @@ async function init() {
 }
 function setMode(m) {
   const c = m === 'c';
-  $('#vCli').classList.toggle('active', c); $('#vFer').classList.toggle('active', !c);
-  $('#bCli').className = 'px-3 py-1.5 rounded-lg ' + (c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
-  $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
+  $('#vCli')?.classList.toggle('active', c);
+  $('#vFer')?.classList.toggle('active', !c);
+  // Switch de escritorio y móvil comparten estado
+  for (const [cli, fer] of [['#bCli', '#bFer'], ['#bCliM', '#bFerM']]) {
+    const cb = $(cli), fb = $(fer);
+    if (cb) cb.className = 'px-3 py-1.5 rounded-lg ' + (c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-white/10 text-white/80 text-xs font-bold');
+    if (fb) fb.className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-white/10 text-white/80 text-xs font-bold');
+  }
   paintSession();
   if (!c) {
     const hasSession = !!AT || !!localStorage.getItem('ga_active_store');
     if (hasSession) { loadOrders(); startRealtime(); }
     else { ftab('ped'); openModal('loginModal'); } // sin sesión: pedir login, no dejar la vista vacía
-  } else stopRealtime();
+  } else {
+    stopRealtime();
+    // Al volver al catálogo, refrescar productos (por si se agregó stock/fotos)
+    window._all = null;
+    loadProducts();
+  }
 }
 window.setMode = setMode; // Exponer en global scope para onclick inline
 
 function ftab(t) {
-  $('#fPed').classList.toggle('hidden', t !== 'ped');
-  $('#fStk').classList.toggle('hidden', t !== 'stk');
-  $('#fInv').classList.toggle('hidden', t !== 'inv');
-  if (t === 'ped') loadOrders(); 
+  $('#fPed')?.classList.toggle('hidden', t !== 'ped');
+  $('#fStk')?.classList.toggle('hidden', t !== 'stk');
+  $('#fInv')?.classList.toggle('hidden', t !== 'inv');
+  // Resaltar el tab activo del panel lateral
+  document.querySelectorAll('[data-ftab]').forEach(b => {
+    const on = b.dataset.ftab === t;
+    b.className = on
+      ? 'w-full text-left px-3 py-2 rounded-xl bg-ferrex-neon text-ferrex-bg-alt font-black text-sm'
+      : 'w-full text-left px-3 py-2 rounded-xl text-white/80 hover:bg-white/10 font-bold text-sm';
+  });
+  if (t === 'ped') loadOrders();
   if (t === 'stk') renderStock();
-  if (t === 'inv') loadInventory();
+  if (t === 'inv') { openModal('invModal'); loadInventory(); }
 }
+window.ftab = ftab;
 function setPay(p) {
   pay = p;
-  document.querySelectorAll('.pay').forEach(b => { const on = b.textContent === p; b.className = 'pay rounded-xl py-2 ' + (on ? 'bg-plomo text-white' : 'bg-gray-100'); });
+  document.querySelectorAll('.pay').forEach(b => {
+    const on = b.textContent.trim() === p;
+    b.className = 'pay font-bold rounded-xl py-2 text-xs ' + (on ? 'bg-plomo text-white' : 'bg-gray-100 text-ferrex-text');
+  });
 }
 
 /* ---------- tiendas (filtradas por zona) ---------- */
@@ -357,6 +393,7 @@ async function loadStores() {
     return `<option value="${s.id}" ${String(s.id) === String(storeId) ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito || s.zona || '')}${d}${st}${demoBadge}</option>`;
   }).join('');
   paintSession();
+  paintStoreCards();
   window._all = null; loadProducts();
 }
 function onStoreChange() {
@@ -366,9 +403,78 @@ function onStoreChange() {
   localStorage.setItem('ga_store', storeId);
   window._all = null;
   metaForStore(stores.find(s => String(s.id) === String(storeId)));
+  paintStoreCards();
   loadProducts();
   if ($('#vFer').classList.contains('active')) { loadOrders(); startRealtime(); }
 }
+
+/* ---------- Tarjetas de tiendas (hero + sidebar) ---------- */
+function storeEmoji(i) { return ['🔩💡🔒', '🚿🎨🔧', '🪛🧰🔌', '🛠️📐⚙️'][i % 4]; }
+function paintStoreCards() {
+  const hero = $('#heroStores');
+  if (hero) {
+    hero.innerHTML = stores.slice(0, 2).map((s, i) => {
+      const open = s.abierto_ahora !== false;
+      const dist = s.distance_km != null ? ` · A ${s.distance_km} KM` : '';
+      return `<div class="bg-white text-ferrex-text rounded-2xl p-4 shadow-pop flex flex-col">
+        <p class="text-xs font-black ${open ? 'text-listo' : 'text-etiqueta'}">● ${open ? 'ABIERTO' : 'CERRADO'}${dist}</p>
+        <h3 class="font-extrabold mt-1 leading-tight">${esc(s.nombre)}</h3>
+        <p class="text-xs text-ferrex-text-dim mt-0.5">${esc(s.distrito || s.zona || '')}${s.direccion ? ' · ' + esc(s.direccion) : ''}</p>
+        <p class="text-[11px] text-ferrex-text-muted mt-1">${esc(s.horario_txt || 'Horario no registrado')}</p>
+        <div class="mt-2 text-4xl">${storeEmoji(i)}</div>
+        <button onclick="pickStore('${esc(s.id)}')" class="mt-3 w-full ${i === 0 ? 'btn-primary' : 'bg-plomo text-white'} font-bold py-2 rounded-xl text-sm">Pedir aquí</button>
+      </div>`;
+    }).join('') || `<div class="bg-white text-ferrex-text rounded-2xl p-4 shadow-pop sm:col-span-2">
+      <p class="text-xs font-black text-ferrex-neon-dim">● SUMATE AL PILOTO</p>
+      <h3 class="font-extrabold mt-1">Todavía no hay ferreterías en tu zona</h3>
+      <p class="text-xs text-ferrex-text-dim mt-1">Registrá tu ferretería y aparecé en el catálogo de FERREX.</p>
+      <button onclick="openModal('storeModal')" class="mt-3 w-full btn-primary font-bold py-2 rounded-xl text-sm">Registrar mi ferretería</button>
+    </div>`;
+  }
+  const list = $('#tiendasList');
+  if (list) {
+    list.innerHTML = stores.map(s => {
+      const active = String(s.id) === String(storeId);
+      const short = String(s.nombre || 'Ferretería').replace(/^Ferretería\s+/i, '');
+      const dist = s.distance_km != null ? `${s.distance_km} km · ` : '';
+      return `<button onclick="pickStore('${esc(s.id)}')" class="w-full text-left p-2 rounded-xl border-2 ${active ? 'border-ferrex-neon bg-ferrex-neon/5' : 'border-ferrex-border hover:border-ferrex-neon'} transition-colors">
+        <b class="text-ferrex-text">${esc(short)}</b><br>
+        <span class="text-[11px] text-ferrex-text-muted">${dist}${s.abierto_ahora === false ? 'Cerrado' : 'Abierto'}</span>
+      </button>`;
+    }).join('') || `<button onclick="openModal('storeModal')" class="w-full text-left p-2 rounded-xl border-2 border-dashed border-ferrex-border text-ferrex-text-dim text-xs">+ Registrá la primera ferretería</button>`;
+  }
+  const lbl = $('#storeLbl');
+  if (lbl) {
+    const s = stores.find(x => String(x.id) === String(storeId));
+    lbl.textContent = s ? '· ' + String(s.nombre).replace(/^Ferretería\s+/i, '') : '· tu zona';
+  }
+}
+function pickStore(id) {
+  const st = stores.find(s => String(s.id) === String(id));
+  if (!st) { toast('No encontramos esa ferretería'); return; }
+  storeId = st.id;
+  try { localStorage.setItem('ga_store', storeId); } catch {}
+  const sel = $('#storeSel'); if (sel) sel.value = storeId;
+  window._all = null;
+  metaForStore(st);
+  paintStoreCards();
+  loadProducts();
+  toast(`Tienda: ${st.nombre} ✓`);
+  document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.pickStore = pickStore;
+
+function scrollToCart() {
+  document.getElementById('cartPanel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+window.scrollToCart = scrollToCart;
+
+function scrollToNewProduct() {
+  setMode('f');
+  ftab('inv');
+  needAuth(() => openModal('prodModal'));
+}
+window.scrollToNewProduct = scrollToNewProduct;
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 /* ---------- Sesión ferretera (JWT en memoria + refresh httpOnly) ---------- */
 // El refresh vive en cookie httpOnly (inaccesible a JS/XSS); el access de 15 min
@@ -379,7 +485,7 @@ function authHeaders(extra = {}) {
   return AT ? { ...extra, 'Authorization': 'Bearer ' + AT } : extra;
 }
 function needAuth(fn) {
-  if (!AT) { toast('Inicia sesión como ferretería 🔐'); openModal('loginModal'); return; }
+  if (!AT && !localStorage.getItem('ga_active_store')) { toast('Inicia sesión como ferretería 🔐'); openModal('loginModal'); return; }
   fn();
 }
 async function tryRefresh() {
@@ -542,13 +648,33 @@ function paintSchedule(s) {
 }
 async function saveSchedule() {
   const dias = [...document.querySelectorAll('#myDias input:checked')].map(i => Number(i.value));
+  const apertura = $('#hApe').value;
+  const cierre = $('#hCie').value;
+  const abierto = $('#hOpen').checked;
+  const payload = {
+    apertura, cierre, dias_atencion: dias,
+    abierta: abierto, abierto,
+    horario: { apertura, cierre, dias }
+  };
   try {
-    const s = await apiAuth(`/stores/${storeId}`, 'PATCH', {
-      abierto: $('#hOpen').checked,
-      horario: { apertura: $('#hApe').value, cierre: $('#hCie').value, dias }
-    });
-    const i = stores.findIndex(x => x.id === s.id); if (i >= 0) stores[i] = s;
-    paintSession(); toast('Horario guardado ✅');
+    const s = await apiAuth(`/stores/${storeId}`, 'PATCH', payload);
+    if (s?.demo) {
+      // Modo demo: guardar horario en localStorage
+      const active = JSON.parse(localStorage.getItem('ga_active_store') || 'null') || {};
+      const upd = { ...active, ...payload, abierto, abierto_ahora: abierto, horario: payload.horario, horario_txt: `${apertura} - ${cierre}` };
+      try {
+        localStorage.setItem('ga_active_store', JSON.stringify(upd));
+        const demos = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').map(d => String(d.id) === String(storeId) ? { ...d, ...upd } : d);
+        localStorage.setItem('ga_demo_stores', JSON.stringify(demos));
+      } catch {}
+      paintSession();
+      toast('Horario guardado localmente ✅');
+      return;
+    }
+    // Releer tiendas para obtener el formato público (horario, abierto_ahora)
+    await loadStores();
+    paintSession();
+    toast('Horario guardado ✅');
   } catch (e) { toast(e.message); }
 }
 /* SEO dinámico: título + descripción según distrito / tienda (deep links) */
@@ -682,30 +808,45 @@ async function saveStore(e) {
 
 /* ---------- catálogo ---------- */
 async function loadProducts() {
-  const q = $('#q').value || '';
+  const qEl = $('#q');
+  const q = qEl ? (qEl.value || '') : '';
   let apiProducts = [];
-  const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`, { timeout: 30000 });
-  if (productsResult.ok) apiProducts = productsResult.data;
+  // Las tiendas demo tienen ids numéricos: la API sólo entiende UUID
+  if (UUID_RE.test(String(storeId))) {
+    const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`, { timeout: 30000 });
+    if (productsResult.ok) apiProducts = productsResult.data;
+  }
   
   // Cargar productos demo de localStorage solo si no hay productos de la API
   let demoProducts = [];
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
-  const storeDemoProducts = demoProducts.filter(p => String(p.store_id) === String(storeId));
-  
+  let storeDemoProducts = demoProducts.filter(p => String(p.store_id) === String(storeId));
+  if (activeCat !== 'Todo') storeDemoProducts = storeDemoProducts.filter(p => p.categoria === activeCat);
+  if (q) storeDemoProducts = storeDemoProducts.filter(p => String(p.nombre || '').toLowerCase().includes(q.toLowerCase()));
+
   // Solo usar productos demo si no hay productos de la API
   products = apiProducts.length > 0 ? apiProducts : [...apiProducts, ...storeDemoProducts];
   
-  $('#cats').innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="cat-pill ${activeCat === c ? 'active' : 'inactive'}">${c}</button>`).join('');
-  $('#grid').innerHTML = products.filter(p => p.stock).map(p => `
-    <div class="product-card p-3">
+  const catsEl = $('#cats');
+  if (catsEl) catsEl.innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="cat-pill ${activeCat === c ? 'active' : 'inactive'}">${c}</button>`).join('');
+  const catSide = $('#catSide');
+  if (catSide) catSide.innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="w-full text-left px-3 py-2 rounded-xl text-sm font-bold ${activeCat === c ? 'bg-ferrex-bg-alt text-white' : 'text-ferrex-text-dim hover:bg-ferrex-bg'}">${c}</button>`).join('');
+
+  const grid = $('#grid');
+  if (grid) grid.innerHTML = products.filter(p => p.stock).map(p => `
+    <div class="product-card">
       ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
         : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
         : `<div class="product-emoji">${p.emoji || '📦'}</div>`}
-      <p class="text-[11px] text-ferrex-text-muted font-bold mt-2">${esc(p.categoria)}</p>
+      <p class="text-[11px] text-ferrex-text-muted font-bold mt-2 uppercase tracking-wide">${esc(p.categoria)}</p>
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
-      <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
-      <button onclick="addCart('${p.id}')" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
-    </div>`).join('') || '<div class="col-span-3 text-center py-12"><p class="text-ferrex-text-muted text-lg mb-4">📦 Sin productos disponibles</p><button onclick="scrollToNewProduct()" style="background-color: #17FF00; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">+ Agregar producto</button></div>';
+      ${priceHtml(p, 'mt-1')}
+      <button onclick="addCart('${esc(p.id)}')" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
+    </div>`).join('') || `<div class="col-span-full text-center py-12 bg-ferrex-card border border-dashed border-ferrex-border rounded-2xl">
+      <p class="text-ferrex-text-muted text-lg mb-1">📦 Sin productos disponibles</p>
+      <p class="text-xs text-ferrex-text-muted mb-4">Si sos ferretero, publicá tu primer producto con foto.</p>
+      <button onclick="scrollToNewProduct()" class="btn-primary px-5 py-2.5 rounded-xl text-sm">+ Agregar producto</button>
+    </div>`;
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
@@ -720,38 +861,46 @@ function updateCartQuantity(id, delta) {
 function totals() {
   let s = 0, n = 0;
   const all = [...products, ...(window._all || [])];
-  for (const [id, q] of Object.entries(cart)) { const p = all.find(x => x.id == id); if (p) { s += p.precio * q; n += q; } }
+  for (const [id, q] of Object.entries(cart)) {
+    const p = all.find(x => String(x.id) === String(id));
+    if (p) { s += Number(p.precio_oferta || p.precio) * q; n += q; }
+  }
   const del = document.querySelector('input[name=del]:checked')?.value !== 'recojo';
   const ship = n === 0 ? 0 : (del ? s * SHIPPING_RATE : 0);
   return { sub: s, n, ship, total: s + ship, del };
 }
 async function renderCart() {
   if (!window._all) { 
-    const allResult = await api(`/products?store_id=${storeId}`);
-    if (allResult.ok) window._all = allResult.data;
-    else window._all = products;
+    if (UUID_RE.test(String(storeId))) {
+      const allResult = await api(`/products?store_id=${storeId}`);
+      if (allResult.ok) window._all = allResult.data;
+      else window._all = products;
+    } else {
+      window._all = products;
+    }
   }
   const t = totals();
-  $('#cartN').textContent = t.n;
+  const cartN = $('#cartN'); if (cartN) cartN.textContent = t.n;
   const all = [...products, ...(window._all || [])];
-  $('#cartBox').innerHTML = t.n === 0 ? '<p class="text-ferrex-text-muted text-center">Vacío</p>' :
-    Object.entries(cart).map(([id, q]) => { const p = all.find(x => x.id == id); if (!p) return '';
-      const unitPrice = p.precio_oferta || p.precio;
+  const cartBox = $('#cartBox');
+  if (cartBox) cartBox.innerHTML = t.n === 0 ? '<p class="text-ferrex-text-muted text-center py-4 text-sm">Vacío. Agregá algo urgente 👆</p>' :
+    Object.entries(cart).map(([id, q]) => { const p = all.find(x => String(x.id) === String(id)); if (!p) return '';
+      const unitPrice = Number(p.precio_oferta || p.precio);
       return `<div class="flex items-center justify-between bg-ferrex-bg rounded-xl p-2 gap-2">
         <div class="flex items-center gap-2 flex-1 min-w-0">
-          <button onclick="updateCartQuantity('${id}', -1)" class="btn-secondary text-xl px-2 py-0 leading-none" aria-label="Disminuir">−</button>
+          <button onclick="updateCartQuantity('${esc(id)}', -1)" class="btn-secondary text-xl px-2 py-0 leading-none" aria-label="Disminuir">−</button>
           <span class="font-bold text-ferrex-text whitespace-nowrap">${q}×</span>
-          <button onclick="updateCartQuantity('${id}', 1)" class="btn-secondary text-xl px-2 py-0 leading-none" aria-label="Incrementar">+</button>
+          <button onclick="updateCartQuantity('${esc(id)}', 1)" class="btn-secondary text-xl px-2 py-0 leading-none" aria-label="Incrementar">+</button>
           <span class="text-ferrex-text truncate">${esc(p.nombre)}</span>
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-ferrex-neon font-bold">${money(unitPrice * q)}</span>
-          <button onclick="removeCart('${id}')" class="text-ferrex-text-muted hover:text-ferrex-danger p-1" aria-label="Eliminar">🗑️</button>
+          <span class="text-ferrex-neon-dim font-bold whitespace-nowrap">${money(unitPrice * q)}</span>
+          <button onclick="removeCart('${esc(id)}')" class="text-ferrex-text-muted hover:text-ferrex-danger p-1" aria-label="Eliminar">🗑️</button>
         </div>
       </div>`; }).join('');
-  $('#subT').textContent = money(t.sub);
-  $('#shT').textContent = t.n === 0 ? '—' : (t.del ? `${money(t.ship)}` : 'Gratis (recojo en tienda)');
-  $('#toT').textContent = money(t.total);
+  const subT = $('#subT'); if (subT) subT.textContent = money(t.sub);
+  const shT = $('#shT'); if (shT) shT.textContent = t.n === 0 ? '—' : (t.del ? `${money(t.ship)}` : 'Gratis (recojo en tienda)');
+  const toT = $('#toT'); if (toT) toT.textContent = money(t.total);
 }
 
 /* ---------- 1. Checkout + WhatsApp ---------- */
@@ -760,13 +909,13 @@ function currentStore() { return stores.find(s => String(s.id) === String(storeI
 function buildWhatsAppMessage(t, store) {
   const all = [...products, ...(window._all || [])];
   const itemsText = Object.entries(cart).map(([id, q]) => {
-    const p = all.find(x => x.id == id);
-    return `• ${q}x ${p?.nombre || 'Producto'} - S/ ${(p?.precio || 0).toFixed(2)}`;
+    const p = all.find(x => String(x.id) === String(id));
+    return `• ${q}x ${p?.nombre || 'Producto'} - S/ ${Number(p?.precio_oferta || p?.precio || 0).toFixed(2)}`;
   }).join('\n');
   
   const deliveryText = t.del 
-    ? `🚚 Delivery a: ${$('#addr').value.trim() || 'Dirección no especificada'}`
-    : `🏪 Recojo en tienda${$('#pickupName').value.trim() ? ` - Quien recoge: ${$('#pickupName').value.trim()}` : ''}`;
+    ? `🚚 Delivery a: ${$('#addr')?.value.trim() || 'Dirección no especificada'}`
+    : `🏪 Recojo en tienda${$('#pickupName')?.value.trim() ? ` - Quien recoge: ${$('#pickupName').value.trim()}` : ''}`;
   
   const paymentText = `💳 Pago: ${pay}`;
   const subtotal = t.sub;
@@ -817,12 +966,12 @@ async function sendOrder() {
   // ⚠️ Snapshot del carrito ANTES de vaciarlo (fix: antes se vaciaba primero)
   const all = [...products, ...(window._all || [])];
   const items = Object.entries(cart).map(([id, q]) => {
-    const p = all.find(x => x.id == id);
+    const p = all.find(x => String(x.id) === String(id));
     return {
-      product_id: Number(id),
+      product_id: String(id), // UUID real: nunca convertir a Number
       nombre: p?.nombre || 'Producto',
       qty: q,
-      price: p?.precio_oferta || p?.precio || 0
+      price: Number(p?.precio_oferta || p?.precio || 0)
     };
   });
   if (!items.length) { toast('Carrito vacío 🛒'); return; }
@@ -832,31 +981,35 @@ async function sendOrder() {
   const localWhatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(localMessage)}`;
 
   const body = {
-    store_id: storeId,
+    store_id: String(storeId),
     items,
     total: t.total,
     pay,
-    address: $('#addr').value.trim(),
-    pickupName: $('#pickupName').value.trim(),
+    address: $('#addr')?.value.trim() || '',
+    pickupName: $('#pickupName')?.value.trim() || '',
     delivery: t.del ? 'delivery' : 'recojo',
     clientZone: getLoc()
   };
 
   const btn = $('#sendBtn');
-  btn.disabled = true;
-  btn.textContent = 'Guardando pedido…';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando pedido…'; }
 
-  // 1) Guardar PRIMERO en la base de datos
+  // 1) Guardar PRIMERO en la base de datos (solo si tienda y productos son UUID reales)
+  const canSave = UUID_RE.test(String(store.id)) && items.every(i => UUID_RE.test(String(i.product_id)));
   let saved;
-  try {
-    saved = await api('/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      timeout: 30000 // Render free tier: cold start puede tardar
-    });
-  } catch (e) {
-    saved = { ok: false, error: e.message };
+  if (!canSave) {
+    saved = { ok: false, error: 'modo demo local' };
+  } else {
+    try {
+      saved = await api('/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        timeout: 30000 // Render free tier: cold start puede tardar
+      });
+    } catch (e) {
+      saved = { ok: false, error: e.message };
+    }
   }
 
   // 2) Determinar código, mensaje y URL (preferimos lo que devolvió el backend)
@@ -875,12 +1028,11 @@ async function sendOrder() {
   }
 
   // 3) Mostrar confirmación en UI
-  $('#orderOk').classList.remove('hidden');
-  $('#okCode').textContent = `Pedido ${code}`;
-  $('#okTxt').textContent = `${t.n} productos · ${t.del ? 'Delivery' : 'Recojo'} · ${pay} · Total ${money(t.total)}`;
+  $('#orderOk')?.classList.remove('hidden');
+  const okCode = $('#okCode'); if (okCode) okCode.textContent = `Pedido ${code}`;
+  const okTxt = $('#okTxt'); if (okTxt) okTxt.textContent = `${t.n} productos · ${t.del ? 'Delivery' : 'Recojo'} · ${pay} · Total ${money(t.total)}`;
   const a = $('#waCta');
-  a.href = whatsappUrl;
-  a.classList.remove('hidden');
+  if (a) { a.href = whatsappUrl; a.classList.remove('hidden'); }
   window._lastWa = message;
 
   // 4) Abrir WhatsApp DESPUÉS de guardar
@@ -891,8 +1043,7 @@ async function sendOrder() {
   cart = {};
   renderCart();
 
-  btn.disabled = false;
-  btn.textContent = 'Confirmar pedido por WhatsApp →';
+  if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido por WhatsApp →'; }
 }
 
 // Función auxiliar para construir mensaje (compatibilidad con código anterior)
@@ -906,22 +1057,28 @@ function copyWa() { navigator.clipboard?.writeText(window._lastWa || '').then(()
 
 /* ---------- ferretería: stock ---------- */
 async function toggleStock(id, val) {
-  const newStock = val === true || val === 'true';
-  try {
-    // 1. Intentar API
-    await apiAuth(`/products/${id}`, 'PATCH', { stock: newStock });
-  } catch (err) {
-    // 2. Fallback localStorage demo - SILENCIOSO
-    console.debug('API stock toggle falló, actualizando localStorage:', err.message);
+  const newStock = val === true || val === 'true' || val === 1;
+  let savedRemote = false;
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
+  if (AT && !isDemo) {
+    try {
+      // 1. Intentar API (apiAuth devuelve {demo:true} si no hay sesión/red)
+      const r = await apiAuth(`/products/${id}/stock`, 'PATCH', { stock: newStock });
+      savedRemote = !r?.demo;
+    } catch (err) {
+      console.debug('API stock toggle falló:', err.message);
+    }
+  }
+  // 2. Fallback localStorage demo
+  if (!savedRemote) {
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
-    const idx = demoProducts.findIndex(p => p.id === id);
+    const idx = demoProducts.findIndex(p => String(p.id) === String(id));
     if (idx >= 0) {
       demoProducts[idx].stock = newStock;
       localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
     }
-    // También actualizar en stores si está ahí
-    const storeIdx = products.findIndex(p => p.id === id);
+    const storeIdx = products.findIndex(p => String(p.id) === String(id));
     if (storeIdx >= 0) products[storeIdx].stock = newStock;
   }
   window._all = null;
@@ -931,7 +1088,7 @@ async function toggleStock(id, val) {
 
 async function saveProduct(e) {
   e.preventDefault();
-  if (!AT) { closeModal('prodModal'); needAuth(() => openModal('prodModal')); return; }
+  if (!AT && !localStorage.getItem('ga_active_store')) { closeModal('prodModal'); needAuth(() => openModal('prodModal')); return; }
   
   const form = e.target;
   const fileInput = form.querySelector('[name=foto]');
@@ -980,7 +1137,8 @@ async function saveProduct(e) {
   };
   
   try {
-    // 1. Intentar API
+    // 1. Intentar API (sólo tiendas reales con sesión no-demo)
+    if (!UUID_RE.test(String(storeId)) || String(AT).startsWith('demo-token')) throw new Error('modo demo local');
     const fd = new FormData(form);
     fd.append('store_id', storeId);
     const r = await fetch(apiURL('/products'), { method: 'POST', headers: authHeaders(), body: fd });
@@ -1020,114 +1178,112 @@ function fileToBase64(file) {
     reader.readAsDataURL(file);
   });
 }
-async function toggleStock(id, val) {
-  try { await apiAuth(`/products/${id}`, 'PATCH', { stock: val }); window._all = null; loadProducts(); }
-  catch (e) { toast(e.message); }
-}
 async function delProduct(id) {
   if (!confirm('¿Eliminar producto y su foto?')) return;
-  try { await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() }); window._all = null; loadProducts(); }
-  catch (e) {
-    if (/sesi|401|Inicia sesión|vencida/i.test(e.message)) { AT = null; paintSession(); openModal('loginModal'); }
-    toast(e.message);
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
+  let ok = false;
+  if (!isDemo) {
+    const r = await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
+    ok = r.ok;
+    if (!r.ok && /sesi|401|Inicia sesión|vencida/i.test(r.error || '')) {
+      AT = null; paintSession(); openModal('loginModal');
+    }
   }
+  if (!ok) {
+    // Fallback demo local
+    let demoProducts = [];
+    try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+    demoProducts = demoProducts.filter(p => String(p.id) !== String(id));
+    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+  }
+  window._all = null;
+  loadProducts();
+  toast(ok ? 'Producto eliminado ✅' : 'Producto eliminado localmente 🗑️');
 }
 function renderStock() {
+  const el = $('#fStk');
+  if (!el) return;
   const list = window._all || products;
-  $('#fStk').innerHTML = list.map(p => `<div class="flex items-center gap-3 p-3">
+  el.innerHTML = list.map(p => `<div class="flex items-center gap-3 p-3">
     ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="Foto de ${esc(p.nombre)}" class="w-12 h-12 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
       : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="Foto de ${esc(p.nombre)}" class="w-12 h-12 object-cover rounded-xl" loading="lazy" onerror="imgFallback(this)">`
       : `<span class="text-2xl">${p.emoji || '📦'}</span>`}
-    <div class="flex-1"><b class="text-sm text-ferrex-text">${esc(p.nombre)}</b> <span class="price-tag text-xs">${money(p.precio)}</span></div>
-    <button onclick="toggleStock(${p.id},${!p.stock})" class="text-xs font-black px-3 py-2 rounded-full ${p.stock ? 'bg-listo text-plomoDark' : 'bg-ferrex-danger text-white'}">${p.stock ? 'HAY ✓' : 'SIN STOCK'}</button>
-    <button onclick="delProduct(${p.id})" class="text-xs px-2 text-ferrex-text-muted hover:text-ferrex-danger" aria-label="Eliminar">🗑️</button></div>`).join('');
+    <div class="flex-1 min-w-0"><b class="text-sm text-ferrex-text block truncate">${esc(p.nombre)}</b> <span class="price-tag text-xs">${money(p.precio)}</span></div>
+    <button onclick="toggleStock('${esc(p.id)}', ${!p.stock})" class="text-xs font-black px-3 py-2 rounded-full whitespace-nowrap ${p.stock ? 'bg-listo text-white' : 'bg-ferrex-danger text-white'}">${p.stock ? 'HAY ✓' : 'SIN STOCK'}</button>
+    <button onclick="delProduct('${esc(p.id)}')" class="text-xs px-2 text-ferrex-text-muted hover:text-ferrex-danger" aria-label="Eliminar">🗑️</button></div>`).join('') || '<p class="text-ferrex-text-muted text-center py-6 text-sm">Sin productos todavía.</p>';
 }
 
 /* ---------- INVENTARIO MANAGEMENT ---------- */
 async function loadInventory() {
-  if (!AT) { needAuth(() => openModal('invModal')); return; }
-  $('#invList').innerHTML = '<p class="text-ferrex-text-dim text-center py-4">Cargando inventario…</p>';
-  
+  const demoSession = localStorage.getItem('ga_active_store');
+  if (!AT && !demoSession) { needAuth(() => openModal('invModal')); return; }
+  const listEl = $('#invList');
+  if (!listEl) return;
+  listEl.innerHTML = '<p class="text-ferrex-text-dim text-center py-4">Cargando inventario…</p>';
+
   let demoProducts = [];
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   const storeProducts = demoProducts.filter(p => String(p.store_id) === String(storeId));
-  
-  // Fetch with retry (3 attempts, 8s timeout each) + exponential backoff
+
+  // 2 intentos con backoff; si falla, seguimos con lo local
   let apiProducts = [];
-  
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const apiResult = await fetch(apiURL(`/products?store_id=${storeId}`), { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (apiResult.ok) {
-        const data = await apiResult.json();
-        if (data.ok) {
-          apiProducts = data.data || [];
-          break; // Success, exit retry loop
-        }
-        throw new Error(`HTTP ${apiResult.status}`);
-      } else {
-        throw new Error(`HTTP ${apiResult.status}`);
-      }
-    } catch (err) {
-      console.warn(`API products attempt ${attempt}/3 failed:`, err.message);
-      if (attempt === 3) {
-        console.warn('All retries failed, using localStorage only:', err.message);
-        apiProducts = [];
-      } else {
-        // Wait before retry (exponential backoff)
-        await new Promise(r => setTimeout(r, 1000 * attempt));
-closeModal('invModal');
-      loadInventory();
+  if (UUID_RE.test(String(storeId))) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const r = await api(`/products?store_id=${storeId}`, { timeout: 15000 });
+      if (r.ok) { apiProducts = Array.isArray(r.data) ? r.data : []; break; }
+      console.warn(`Inventario: intento ${attempt}/2 falló:`, r.error);
+      if (attempt < 2) await new Promise(res => setTimeout(res, 800 * attempt));
     }
   }
-}
-  
-  const allProducts = [...apiProducts, ...storeProducts];
-  
+
+  // Deduplicar por id (API manda; demo completa)
+  const byId = new Map();
+  for (const p of [...apiProducts, ...storeProducts]) byId.set(String(p.id), p);
+  const allProducts = [...byId.values()];
+
   if (!allProducts.length) {
-    $('#invList').innerHTML = `
-      <div class="text-center py-12">
-        <p class="text-ferrex-text-dim text-lg mb-4">📦 Aún no tienes productos en tu catálogo</p>
-        <button onclick="scrollToNewProduct()" style="background-color: #17FF00; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">+ Agregar producto</button>
-      </div>`;
+    listEl.innerHTML = `<div class="text-center py-10">
+      <p class="text-ferrex-text-dim text-lg mb-4">📦 Aún no tenés productos en tu catálogo</p>
+      <button onclick="closeModal('invModal'); openModal('prodModal')" class="btn-primary px-5 py-2.5 rounded-xl text-sm">+ Agregar producto</button>
+    </div>`;
     return;
   }
-  
-  $('#invList').innerHTML = allProducts.map(p => `
-    <div class="inv-product-row" data-id="${p.id}">
-      <div class="inv-product-header">
-        <div>
-          <span class="font-bold text-ferrex-text">${esc(p.nombre)}</span>
-          <span class="text-xs text-ferrex-text-dim ml-2">${esc(p.categoria)}</span>
-          ${p.codigo ? `<span class="text-xs text-ferrex-text-dim ml-2">SKU: ${esc(p.codigo)}</span>` : ''}
+
+  listEl.innerHTML = allProducts.map(p => `
+    <div class="inv-product-row" data-id="${esc(p.id)}">
+      <div class="inv-product-header gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="" class="w-10 h-10 object-cover rounded-lg" loading="lazy" onerror="imgFallback(this)">`
+            : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="" class="w-10 h-10 object-cover rounded-lg" loading="lazy" onerror="imgFallback(this)">`
+            : `<span class="text-2xl">${p.emoji || '📦'}</span>`}
+          <div class="min-w-0">
+            <span class="font-bold text-ferrex-text block truncate">${esc(p.nombre)}</span>
+            <span class="text-xs text-ferrex-text-dim">${esc(p.categoria)}${p.codigo ? ' · SKU: ' + esc(p.codigo) : ''}</span>
+          </div>
         </div>
         <span class="stock-badge ${p.stock ? 'in-stock' : 'out-stock'}">${p.stock ? 'HAY' : 'SIN STOCK'}</span>
       </div>
       <div class="inv-product-fields">
         <div>
           <label class="text-xs text-ferrex-text-dim">Precio S/</label>
-          <input type="number" step="0.10" min="0.1" value="${p.precio}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'precio', this.value)">
+          <input type="number" step="0.10" min="0.1" value="${Number(p.precio) || 0}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField('${esc(p.id)}', 'precio', this.value)">
         </div>
         <div>
-          <label class="text-xs text-ferrex-text-dim">Stock</label>
-          <input type="number" min="0" value="${p.stock_qty || p.stock_count || 0}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'stock_qty', this.value)">
+          <label class="text-xs text-ferrex-text-dim">Stock (unidades)</label>
+          <input type="number" min="0" value="${Number(p.stock_qty) || 0}" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField('${esc(p.id)}', 'stock_qty', this.value)">
         </div>
         <div class="full-width">
           <label class="text-xs text-ferrex-text-dim">Precio Oferta S/</label>
-          <input type="number" step="0.10" min="0" value="${p.precioOferta || ''}" placeholder="Opcional" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'precioOferta', this.value)">
+          <input type="number" step="0.10" min="0" value="${p.precio_oferta != null ? Number(p.precio_oferta) : ''}" placeholder="Opcional" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField('${esc(p.id)}', 'precioOferta', this.value)">
         </div>
         <div class="full-width">
           <label class="text-xs text-ferrex-text-dim">Código / SKU</label>
-          <input type="text" value="${p.codigo || ''}" placeholder="SKU-001" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField(${p.id}, 'codigo', this.value)">
+          <input type="text" value="${esc(p.codigo || '')}" placeholder="SKU-001" class="input-dark rounded-xl px-3 py-2 text-sm" onchange="updateInventoryField('${esc(p.id)}', 'codigo', this.value)">
         </div>
       </div>
       <div class="flex gap-2 pt-2">
-        <button onclick="toggleInventoryStock(${p.id}, ${!p.stock})" class="flex-1 btn-secondary py-2 text-sm">${p.stock ? 'Marcar Sin Stock' : 'Marcar Disponible'}</button>
-        <button onclick="editInventoryProduct(${p.id})" class="btn-outline py-2 text-sm">Editar</button>
-        <button onclick="deleteInventoryProduct(${p.id})" class="btn-secondary py-2 text-sm bg-ferrex-danger border-ferrex-danger">Eliminar</button>
+        <button onclick="toggleInventoryStock('${esc(p.id)}', ${!p.stock})" class="flex-1 btn-secondary py-2 text-sm">${p.stock ? 'Marcar Sin Stock' : 'Marcar Disponible'}</button>
+        <button onclick="deleteInventoryProduct('${esc(p.id)}')" class="btn-secondary py-2 text-sm bg-ferrex-danger border-ferrex-danger text-white">Eliminar</button>
       </div>
     </div>`).join('');
 }
@@ -1135,7 +1291,7 @@ closeModal('invModal');
 /* Funciones de inventario */
 async function addInventoryProduct(e) {
   e.preventDefault();
-  if (!AT) { needAuth(() => openModal('invModal')); return; }
+  if (!AT && !localStorage.getItem('ga_active_store')) { needAuth(() => openModal('invModal')); return; }
   
   const form = e.target;
   const fileInput = form.querySelector('[name=foto]');
@@ -1167,20 +1323,23 @@ async function addInventoryProduct(e) {
   $('#invFormError').classList.add('hidden');
   
   const productData = {
-    id: Date.now(),
+    id: String(Date.now()),
     store_id: storeId,
     codigo,
     nombre,
     precio,
     categoria,
-    stock: true,
+    stock: stock > 0,
     stock_qty: stock,
+    precio_oferta: precioOferta,
     precioOferta,
     foto_base64: fotoBase64,
     creado: new Date().toISOString()
   };
   
   try {
+    // 1. Intentar API (sólo tiendas reales con sesión no-demo)
+    if (!UUID_RE.test(String(storeId)) || String(AT).startsWith('demo-token')) throw new Error('modo demo local');
     const fd = new FormData(form);
     fd.append('store_id', storeId);
     const r = await fetch(apiURL('/products'), { method: 'POST', headers: authHeaders(), body: fd });
@@ -1202,66 +1361,93 @@ async function addInventoryProduct(e) {
       $('#invFotoPrev').src = '';
       closeModal('invModal');
       loadInventory();
+      loadProducts();
     }
 }
   
+// Traduce los campos del inventario a lo que acepta la API
+function inventoryPayload(field, value) {
+  if (field === 'precioOferta' || field === 'precio_oferta') {
+    const n = value === '' || value == null ? null : parseFloat(value);
+    return { precio_oferta: Number.isFinite(n) && n > 0 ? n : null };
+  }
+  if (field === 'precio') {
+    const n = parseFloat(value);
+    return { precio: Number.isFinite(n) && n > 0 ? n : undefined };
+  }
+  if (field === 'stock_qty') {
+    const n = parseInt(value);
+    return { stock_qty: Number.isFinite(n) && n >= 0 ? n : 0 };
+  }
+  return { [field]: value };
+}
+// Guarda el mismo cambio en los productos demo de localStorage
+function updateDemoProduct(id, field, value) {
+  let demoProducts = [];
+  try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+  const idx = demoProducts.findIndex(p => String(p.id) === String(id));
+  if (idx < 0) return false;
+  if (field === 'precioOferta' || field === 'precio_oferta') {
+    demoProducts[idx].precio_oferta = value === '' ? null : value;
+    demoProducts[idx].precioOferta = value === '' ? null : value;
+  } else {
+    demoProducts[idx][field] = value;
+  }
+  try { localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts)); } catch {}
+  return true;
+}
+
 async function updateInventoryField(id, field, value) {
-  if (!AT) return;
-  try {
-    await apiAuth(`/products/${id}`, 'PATCH', { [field]: value });
-    // Actualizar localStorage demo también
-    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
-    const idx = demoProducts.findIndex(p => p.id === id);
-    if (idx >= 0) {
-      demoProducts[idx][field] = value;
-      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
-    }
-    toast('Actualizado ✅');
-  } catch (err) {
-    // Fallback localStorage - SILENCIOSO
-    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
-    const idx = demoProducts.findIndex(p => p.id === id);
-    if (idx >= 0) {
-      demoProducts[idx][field] = value;
-      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
-      toast('Actualizado localmente ✅');
+  const patch = inventoryPayload(field, value);
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
+  let savedRemote = false;
+  if (!isDemo) {
+    try {
+      const r = await apiAuth(`/products/${id}`, 'PATCH', patch);
+      savedRemote = !r?.demo;
+    } catch (err) {
+      console.debug('API inventario falló:', err.message);
     }
   }
+  const savedLocal = updateDemoProduct(id, field, value);
+  if (savedRemote) toast('Actualizado ✅');
+  else if (savedLocal) toast('Actualizado localmente ✅');
+  else toast('No se pudo actualizar ⚠️');
+  loadInventory();
 }
 
 async function toggleInventoryStock(id, newStock) {
-  if (!AT) return;
-  try {
-    await apiAuth(`/products/${id}`, 'PATCH', { stock: newStock });
-  } catch (err) {
-    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
-    const idx = demoProducts.findIndex(p => p.id === id);
-    if (idx >= 0) {
-      demoProducts[idx].stock = newStock;
-      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+  const stock = newStock === true || newStock === 'true';
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
+  let savedRemote = false;
+  if (AT && !isDemo) {
+    try {
+      const r = await apiAuth(`/products/${id}/stock`, 'PATCH', { stock });
+      savedRemote = !r?.demo;
+    } catch (err) {
+      console.debug('API stock falló:', err.message);
     }
   }
+  const savedLocal = updateDemoProduct(id, 'stock', stock);
   loadInventory();
-  toast(newStock ? 'Producto disponible ✅' : 'Producto sin stock ❌');
-}
-
-async function editInventoryProduct(id) {
-  // El formulario ya permite editar inline, solo dar feedback
-  toast('Edita los campos y se guardan automáticamente ✅');
+  if (savedRemote) toast(stock ? 'Producto disponible ✅' : 'Producto sin stock ❌');
+  else if (savedLocal) toast(stock ? 'Disponible localmente ✅' : 'Sin stock localmente ❌');
 }
 
 async function deleteInventoryProduct(id) {
   if (!confirm('¿Eliminar este producto permanentemente?')) return;
-  if (!AT) return;
-  try {
-    await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
-    toast('Producto eliminado ✅');
-  } catch (err) {
-    let demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]');
-    demoProducts = demoProducts.filter(p => p.id !== id);
-    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
-    toast('Producto eliminado localmente ✅');
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
+  let removedRemote = false;
+  if (AT && !isDemo) {
+    const r = await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
+    removedRemote = r.ok;
   }
+  let demoProducts = [];
+  try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
+  demoProducts = demoProducts.filter(p => String(p.id) !== String(id));
+  try { localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts)); } catch {}
+  toast(removedRemote ? 'Producto eliminado ✅' : 'Producto eliminado localmente ✅');
+  window._all = null;
   loadInventory();
   loadProducts();
 }
