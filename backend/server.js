@@ -752,6 +752,21 @@ app.get('/api/admin/ferreterias', requireSuperAdminAuth, async (req, res) => {
   }
 });
 
+// Elimina una ferretería con sus productos, pedidos y sesiones (ON DELETE CASCADE)
+app.delete('/api/admin/ferreterias/:id', requireSuperAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return sendError(res, 400, 'ID inválido');
+    }
+    const deleted = await dbServices.deleteFerreteria(id);
+    if (!deleted) return sendError(res, 404, 'Ferretería no encontrada');
+    res.json({ ok: true, deleted: { id: deleted.id, nombre: deleted.nombre } });
+  } catch (err) {
+    sendError(res, 500, 'Error eliminando ferretería');
+  }
+});
+
 app.post('/api/admin/commission', requireSuperAdminAuth, async (req, res) => {
   try {
     const { rate, currency } = req.body;

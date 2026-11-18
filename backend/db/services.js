@@ -110,6 +110,12 @@ async function verifyFerreteriaPassword(ferreteria, password) {
   return bcrypt.compare(password, ferreteria.password_hash);
 }
 
+// Borra una ferretería y, por ON DELETE CASCADE, sus productos, pedidos y sesiones
+async function deleteFerreteria(id) {
+  const result = await db.query('DELETE FROM ferreterias WHERE id = $1 RETURNING *', [id]);
+  return result.rows[0];
+}
+
 async function getFerreteriasByZona(zona) {
   const result = await db.query('SELECT * FROM ferreterias WHERE zona = $1 AND abierta = true ORDER BY nombre', [zona]);
   return result.rows;
@@ -407,6 +413,7 @@ module.exports = {
   getFerreteriaByPhone,
   updateFerreteria,
   verifyFerreteriaPassword,
+  deleteFerreteria,
   getFerreteriasByZona,
   getAllFerreterias,
   listFerreteriasPublicas,
