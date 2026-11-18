@@ -10,6 +10,7 @@ const ENV_API = (typeof __VITE_API_URL__ !== 'undefined' ? __VITE_API_URL__ : ''
 const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 'https://ferrex-vdex.onrender.com').replace(/\/$/, '');
 function apiURL(p) { return API_BASE + '/api' + p; }
 let activeCat = 'Todo', pay = 'Efectivo';
+let shipMode = 'delivery'; // 'delivery' | 'recojo' (entrega a pie / retiro en tienda)
 let storeId = localStorage.getItem('ga_store') || 1;
 let storesApiOk = true; // false cuando la API de tiendas no respondió tras los reintentos
 let soundOn = localStorage.getItem('ga_sound') !== 'off';
@@ -227,7 +228,7 @@ function handleDeepLink(extraDistritos = []) {
   }
 }
 async function init() {
-  paintSoundBtn(); paintLoc(); handleDeepLink(); initLegal();
+  paintSoundBtn(); paintLoc(); handleDeepLink(); initLegal(); applyShippingUI();
   
 // Ping silencioso en segundo plano para mantener Render despierto
   let healthCheckInterval = null;
@@ -340,6 +341,29 @@ function setPay(p) {
     b.className = 'pay font-bold rounded-xl py-2 text-xs ' + (on ? 'bg-plomo text-white' : 'bg-gray-100 text-ferrex-text');
   });
 }
+
+/* ---------- Delivery / Recojo: estado + UI + recálculo inmediato ---------- */
+function applyShippingUI() {
+  document.querySelectorAll('input[name=del]').forEach(r => {
+    r.checked = r.value === shipMode;
+    const label = r.closest('label');
+    if (label) {
+      label.classList.toggle('active', r.checked);
+      label.setAttribute('aria-checked', String(r.checked));
+    }
+  });
+  // Campos según el modo: dirección solo para delivery, "quién recoge" solo para recojo
+  const addrWrap = $('#addrWrap'); if (addrWrap) addrWrap.style.display = shipMode === 'recojo' ? 'none' : 'block';
+  const pickWrap = $('#pickupWrap'); if (pickWrap) pickWrap.style.display = shipMode === 'recojo' ? 'block' : 'none';
+}
+function setShipping(mode) {
+  shipMode = mode === 'recojo' ? 'recojo' : 'delivery';
+  const radio = document.querySelector(`input[name=del][value="${shipMode}"]`);
+  if (radio) radio.checked = true;
+  applyShippingUI();
+  renderCart(); // recalcula Envío/Total al instante (Gratis 🎉 en recojo, 15% en delivery)
+}
+window.setShipping = setShipping;
 
 /* ---------- tiendas (filtradas por zona) ---------- */
 async function loadStores() {
@@ -904,23 +928,15 @@ function totals() {
     const p = all.find(x => String(x.id) === String(id));
     if (p) { s += Number(p.precio_oferta || p.precio) * q; n += q; }
   }
-  const del = document.querySelector('input[name=del]:checked')?.value !== 'recojo';
+  const checked = document.querySelector('input[name=del]:checked')?.value;
+  if (checked === 'recojo' || checked === 'delivery') shipMode = checked; // el radio manda si existe
+  const del = shipMode !== 'recojo';
   const sub = round2(s);
-  // Recojo: envío gratis. Delivery: 15% del subtotal, redondeado a 2 decimales.
+  // Recojo: envío gratis (S/ 0.00). Delivery: 15% del subtotal, redondeado a 2 decimales.
   const ship = (n === 0 || !del) ? 0 : round2(sub * SHIPPING_RATE);
   return { sub, n, ship, total: round2(sub + ship), del };
 }
-async function renderCart() {
-  if (!window._all) { 
-    if (UUID_RE.test(String(storeId))) {
-      const allResult = await api(`/products?store_id=${storeId}`);
-      if (allResult.ok) window._all = allResult.data;
-      else window._all = products;
-    } else {
-      window._all = products;
-    }
-  }
-  const t = totals();
+function paintCart(t) {
   const cartN = $('#cartN'); if (cartN) cartN.textContent = t.n;
   const all = [...products, ...(window._all || [])];
   const cartBox = $('#cartBox');
@@ -946,6 +962,21 @@ async function renderCart() {
     else shT.textContent = money(t.ship);
   }
   const toT = $('#toT'); if (toT) toT.textContent = money(t.total);
+}
+async function renderCart() {
+  // 1) Pintar YA con los datos en memoria: el cambio Delivery/Recojo se ve al instante
+  paintCart(totals());
+  // 2) Completar en segundo plano el catálogo completo (para ítems fuera del filtro activo)
+  if (!window._all) {
+    if (UUID_RE.test(String(storeId))) {
+      const allResult = await api(`/products?store_id=${storeId}`);
+      if (allResult.ok && Array.isArray(allResult.data)) window._all = allResult.data;
+      else window._all = products;
+    } else {
+      window._all = products;
+    }
+    paintCart(totals());
+  }
 }
 
 /* ---------- 1. Checkout + WhatsApp ---------- */
