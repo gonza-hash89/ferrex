@@ -44,6 +44,9 @@ async function listFerreteriasPublicas({ zona } = {}) {
 
 function mapFerreteriaPublica(f) {
   if (!f) return f;
+  const dias = Array.isArray(f.dias_atencion) ? f.dias_atencion : [1, 2, 3, 4, 5, 6];
+  const apertura = f.apertura ? String(f.apertura).slice(0, 5) : '08:00';
+  const cierre = f.cierre ? String(f.cierre).slice(0, 5) : '20:00';
   return {
     id: f.id,
     nombre: f.nombre,
@@ -55,9 +58,11 @@ function mapFerreteriaPublica(f) {
     whatsapp: f.whatsapp,
     abierta: f.abierta,
     abierto_ahora: f.abierta !== false,
-    apertura: f.apertura,
-    cierre: f.cierre,
-    dias_atencion: f.dias_atencion,
+    apertura,
+    cierre,
+    dias_atencion: dias,
+    horario: { apertura, cierre, dias },
+    horario_txt: `${apertura} - ${cierre}`,
     lat: f.lat,
     lng: f.lng,
     logo_url: f.logo_url

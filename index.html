@@ -385,7 +385,7 @@ tailwind.config = {
 <input name="distrito" required maxlength="60" placeholder="Distrito: Chosica" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
 <input name="direccion" maxlength="160" placeholder="Dirección del local" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
 <div class="grid grid-cols-2 gap-2">
-  <input name="telefono" inputmode="numeric" maxlength="9" placeholder="Celular 9XX XXX XXX" class="input-dark rounded-xl px-3 py-2 text-sm">
+  <input name="telefono" required inputmode="numeric" pattern="9[0-9]{8}" maxlength="9" placeholder="Celular 9XX XXX XXX" class="input-dark rounded-xl px-3 py-2 text-sm">
   <input name="whatsapp" inputmode="numeric" maxlength="11" placeholder="WhatsApp 519…" class="input-dark rounded-xl px-3 py-2 text-sm">
 </div>
 <label class="block text-xs font-semibold text-ferrex-text-dim">Contraseña de la tienda* (mín 6 caracteres, para iniciar sesión)

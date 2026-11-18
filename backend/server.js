@@ -19,6 +19,7 @@ const bcrypt = require('bcryptjs');
 
 const db = require('./db/pool');
 const dbServices = require('./db/services');
+const { migrate } = require('./db/migrate');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -143,6 +144,10 @@ const NEXT = {
 const nonEmpty = (v, max = 120) => typeof v === 'string' && v.trim().length > 0 && v.trim().length <= max;
 const validPrice = v => { const n = Number(v); return Number.isFinite(n) && n > 0 && n < 100000; };
 const validPeruPhone = v => typeof v === 'string' && /^9\d{8}$/.test(v.trim());
+const validTime = t => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+const validHorario = h => !!h && validTime(h.apertura) && validTime(h.cierre)
+  && Array.isArray(h.dias) && h.dias.length > 0
+  && h.dias.every(d => Number.isInteger(d) && d >= 0 && d <= 6);
 function normalizeWhatsapp(v) {
   if (typeof v !== 'string') return null;
   const d = v.replace(/\D/g, '');
@@ -269,7 +274,16 @@ for (const d of [UPLOAD_DIR]) {
 // ================= API ROUTES =================
 
 // Health check
-app.get('/api/health', (req, res) => res.json({ ok: true, app: 'FERREX API', version: '2.0.0', baseUrl: BASE_URL }));
+app.get('/api/health', async (req, res) => {
+  let dbOk = false, dbCode = null;
+  if (!process.env.DATABASE_URL) {
+    dbCode = 'MISSING_DATABASE_URL';
+  } else {
+    try { await db.query('SELECT 1'); dbOk = true; }
+    catch (e) { dbCode = e.code || 'DB_ERROR'; }
+  }
+  res.json({ ok: true, app: 'FERREX API', version: '2.0.0', baseUrl: BASE_URL, db: dbOk, dbCode });
+});
 
 // ================= AUTH FERRETERÍA =================
 app.post('/api/auth/login', authLimiter, vLogin, checkValidation, async (req, res) => {
@@ -328,7 +342,8 @@ app.post('/api/stores', uploadLimiter, upload.single('logo'), vRegister, checkVa
     
     if (!nonEmpty(nombre, 80)) return sendError(res, 400, 'Nombre requerido (3-80)', ['nombre']);
     if (!nonEmpty(distrito, 60)) return sendError(res, 400, 'Distrito requerido', ['distrito']);
-    if (telefono && !validPeruPhone(telefono)) return sendError(res, 400, 'Celular inválido', ['telefono']);
+    const phone = String(telefono || '').replace(/\D/g, '');
+    if (!phone || !validPeruPhone(phone)) return sendError(res, 400, 'Celular inválido (9 dígitos)', ['telefono']);
     if (!password || password.length < 6) return sendError(res, 400, 'Contraseña mín. 6 chars', ['password']);
     
     let wa = null;
@@ -354,14 +369,14 @@ app.post('/api/stores', uploadLimiter, upload.single('logo'), vRegister, checkVa
       if (!validHorario(horario)) return sendError(res, 400, 'Horario inválido', ['horario']);
     }
     
-    const existing = await dbServices.getFerreteriaByPhone(telefono.replace(/\D/g, ''));
+    const existing = await dbServices.getFerreteriaByPhone(phone);
     if (existing) return sendError(res, 400, 'Ya existe una ferretería con ese teléfono', ['telefono']);
     
     if (req.file && rejectFakeImage(req.file)) return sendError(res, 400, 'Archivo no es imagen válida');
     
     const ferreteria = await dbServices.createFerreteria({
       nombre: nombre.trim(), distrito: distrito.trim(), direccion: direccion?.trim() || '',
-      telefono: telefono.replace(/\D/g, ''), whatsapp: wa,
+      telefono: phone || null, whatsapp: wa,
       password, apertura: horario.apertura, cierre: horario.cierre, dias_atencion: horario.dias,
       lat: la, lng: ln, logo_url: req.file ? '/uploads/' + req.file.filename : null
     });
@@ -788,10 +803,20 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 FERREX API v2.0 en ${BASE_URL} (port ${PORT})`);
-    console.log(`Uploads: ${UPLOAD_DIR}`);
-  });
+  (async () => {
+    // Migraciones automáticas al arrancar (Render no siempre respeta render.yaml en servicios creados a mano)
+    if (process.env.AUTO_MIGRATE !== 'false') {
+      try {
+        await migrate();
+      } catch (e) {
+        console.error('⚠️ Migración automática falló; el API arrancará igual:', e.code || e.message);
+      }
+    }
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 FERREX API v2.0 en ${BASE_URL} (port ${PORT})`);
+      console.log(`Uploads: ${UPLOAD_DIR}`);
+    });
+  })();
 }
 
 module.exports = app;

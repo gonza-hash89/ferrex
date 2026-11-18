@@ -576,12 +576,18 @@ async function saveStore(e) {
   const fd = new FormData(form);
   const nombre = fd.get('nombre')?.trim();
   const distrito = fd.get('distrito')?.trim();
+  const telefono = String(fd.get('telefono') || '').replace(/\D/g, '');
   const password = fd.get('password');
   const aceptaTerminos = fd.get('aceptaTerminos');
   const dias = [...form.querySelectorAll('#regDias input:checked')].map(i => Number(i.value));
   
   if (!nombre || !distrito || !password || !aceptaTerminos) {
     errorDiv.textContent = '⚠ Complete todos los campos obligatorios y acepte los términos.';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  if (!/^9\d{8}$/.test(telefono)) {
+    errorDiv.textContent = '⚠ Ingresá un celular válido de 9 dígitos (empieza con 9).';
     errorDiv.classList.remove('hidden');
     return;
   }

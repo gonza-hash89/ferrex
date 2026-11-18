@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm install
-    startCommand: node db/migrate.js && node server.js
+    startCommand: node server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
