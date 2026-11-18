@@ -70,13 +70,18 @@ app.use(helmet({
 const CORS_LIST = (process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean);
 try { CORS_LIST.push(new URL(BASE_URL).origin); } catch {}
-CORS_LIST.push('https://ferrex-pe.netlify.app');
-CORS_LIST.push('http://localhost:3001', 'http://127.0.0.1:3001');
+// Frontends oficiales (Netlify legacy + Vercel + dominio propio)
+for (const o of ['https://ferrex-pe.netlify.app', 'https://ferrex-pe.vercel.app', 'https://ferrex.pe', 'https://www.ferrex.pe']) {
+  if (!CORS_LIST.includes(o)) CORS_LIST.push(o);
+}
+// En desarrollo permitir cualquier localhost/127.0.0.1 (sin importar el puerto)
+const isLocalOrigin = o => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
 
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    cb(null, CORS_LIST.includes(origin.replace(/\/$/, '')));
+    const o = origin.replace(/\/$/, '');
+    cb(null, CORS_LIST.includes(o) || (process.env.NODE_ENV !== 'production' && isLocalOrigin(o)));
   },
   credentials: true, maxAge: 86400
 }));
@@ -356,9 +361,9 @@ app.post('/api/stores', uploadLimiter, upload.single('logo'), vRegister, checkVa
     
     const ferreteria = await dbServices.createFerreteria({
       nombre: nombre.trim(), distrito: distrito.trim(), direccion: direccion?.trim() || '',
-      telefono: telefono.replace(/\D/g, ''), whatsapp: wa, direccion: direccion?.trim() || '',
+      telefono: telefono.replace(/\D/g, ''), whatsapp: wa,
       password, apertura: horario.apertura, cierre: horario.cierre, dias_atencion: horario.dias,
-      lat: la, lng: ln, logo: req.file ? req.file.filename : null
+      lat: la, lng: ln, logo_url: req.file ? '/uploads/' + req.file.filename : null
     });
     
     const accessToken = signAccess(ferreteria.id);

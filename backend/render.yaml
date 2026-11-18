@@ -24,7 +24,7 @@ services:
           name: ferrex-db
           property: connectionString
       - key: CORS_ORIGIN
-        value: https://ferrex-pe.netlify.app
+        value: https://ferrex-pe.vercel.app,https://ferrex-pe.netlify.app,https://ferrex.pe,https://www.ferrex.pe
       - key: ACCESS_TTL
         value: 15m
     autoDeploy: true

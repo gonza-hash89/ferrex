@@ -86,7 +86,7 @@ function previewImage(input) {
   reader.readAsDataURL(file);
 }
 function absImg(u) { if (!u) return u; return u.startsWith('/') ? API_BASE + u : u; }
-function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.classList.add('hidden'), 300); }, 2200); }
+function toast(m) { const t = $('#toast'); if (!t) { console.log('[toast]', m); return; } t.textContent = m; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.classList.add('hidden'), 300); }, 2200); }
 function openModal(id) { 
   const el = $('#' + id); 
   if (el) { 
@@ -251,26 +251,33 @@ async function init() {
         if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
       }
     }
+    return { ok: false }; // FIX: sin esto, init() lanzaba TypeError y la app no cargaba
   }
 
-  const healthResult = await checkHealthWithRetry();
-  if (healthResult.ok) {
-    const h = healthResult.data;
-    $('#apiStat').innerHTML = `• API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'}`;
-    $('#apiStat').className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
-    localStorage.removeItem('ga_demo_mode');
-    startHealthCheckPing(); // Iniciar ping en segundo plano
-  } else {
-    // API no disponible - modo demo silencioso, NO mostrar error rojo
-    $('#apiStat').innerHTML = `• Modo offline (localStorage)`;
-    $('#apiStat').className = 'text-center text-[11px] py-1 bg-amber-900/50 text-amber-200';
-    stopHealthCheckPing(); // Detener ping si API no disponible
-  }
+  // Estado de la API en segundo plano: NO bloquea el render de tiendas/catálogo
+  (async () => {
+    const healthResult = await checkHealthWithRetry();
+    const stat = $('#apiStat');
+    if (!stat) return;
+    if (healthResult.ok) {
+      const h = healthResult.data;
+      stat.innerHTML = `• API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'}`;
+      stat.className = 'text-center text-[11px] py-1 bg-listo text-plomoDark';
+      localStorage.removeItem('ga_demo_mode');
+      startHealthCheckPing(); // Ping en segundo plano para mantener Render despierto
+    } else {
+      // API no disponible - modo demo silencioso, NO mostrar error rojo
+      stat.innerHTML = `• Modo offline (localStorage)`;
+      stat.className = 'text-center text-[11px] py-1 bg-amber-900/50 text-amber-200';
+      stopHealthCheckPing();
+    }
+  })();
+
   await loadStores(); await loadProducts();
   const before = JSON.stringify(getLoc());
   handleDeepLink(stores.map(s => s.distrito).filter(Boolean)); // 2da pasada con distritos de DB
   if (JSON.stringify(getLoc()) !== before) { await loadStores(); await loadProducts(); }
-  if (/^\/(tienda|ferreteria)\//.test(location.pathname)) metaForStore(stores.find(s => s.id === storeId));
+  if (/^\/(tienda|ferreteria)\//.test(location.pathname)) metaForStore(stores.find(s => String(s.id) === String(storeId)));
   if (location.pathname.startsWith('/catalogo')) document.getElementById('grid')?.scrollIntoView();
   $('#storeForm [name=logo]').addEventListener('change', e => {
     const f = e.target.files[0]; if (!f) return;
@@ -288,7 +295,12 @@ function setMode(m) {
   $('#vCli').classList.toggle('active', c); $('#vFer').classList.toggle('active', !c);
   $('#bCli').className = 'px-3 py-1.5 rounded-lg ' + (c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
   $('#bFer').className = 'px-3 py-1.5 rounded-lg ' + (!c ? 'bg-[#17FF00] text-black font-bold text-xs' : 'bg-[#1C252E] text-white text-xs border border-gray-700');
-  if (!c) { loadOrders(); startRealtime(); } else stopRealtime();
+  paintSession();
+  if (!c) {
+    const hasSession = !!AT || !!localStorage.getItem('ga_active_store');
+    if (hasSession) { loadOrders(); startRealtime(); }
+    else { ftab('ped'); openModal('loginModal'); } // sin sesión: pedir login, no dejar la vista vacía
+  } else stopRealtime();
 }
 window.setMode = setMode; // Exponer en global scope para onclick inline
 
@@ -312,7 +324,7 @@ async function loadStores() {
   if (loc && loc.mode === 'gps' && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) qs = `?lat=${loc.lat}&lng=${loc.lng}`;
   else if (loc && loc.mode === 'manual' && loc.distrito) qs = `?distrito=${encodeURIComponent(loc.distrito)}`;
   let apiStores = [];
-  const storesResult = await api('/stores' + qs);
+  const storesResult = await api('/stores' + qs, { timeout: 30000 });
   if (storesResult.ok) apiStores = storesResult.data;
   // Incluir tiendas demo de localStorage
   let demoStores = [];
@@ -326,24 +338,23 @@ async function loadStores() {
     toast(`Sin ferreterías en ${loc?.distrito || 'tu zona'} — registra la tuya`); 
     stores = [...apiStores, ...demoStores]; // mostrar todas si filtro no da resultados
   }
-  if (!stores.find(s => s.id === storeId)) { storeId = stores[0]?.id || 1; localStorage.setItem('ga_store', storeId); }
+  // Deduplicar ferreterías por ID (evitar registros duplicados)
+  const seenIds = new Set();
+  stores = stores.filter(s => {
+    if (seenIds.has(String(s.id))) return false;
+    seenIds.add(String(s.id));
+    return true;
+  });
+
+  if (!stores.find(s => String(s.id) === String(storeId))) {
+    storeId = stores[0]?.id || 1;
+    try { localStorage.setItem('ga_store', storeId); } catch {}
+  }
   $('#storeSel').innerHTML = stores.map(s => {
     const d = s.distance_km != null ? ` · a ${s.distance_km} km (~${s.eta_min} min)` : '';
     const st = s.abierto_ahora === false ? ' · 🔴 Cerrado' : '';
-  // Deduplicar ferreterías por ID (evitar registros duplicados)
-  const storeIds = new Set();
-  const uniqueStores = [];
-  stores.forEach(s => {
-    if (!storeIds.has(s.id)) {
-      storeIds.add(s.id);
-      uniqueStores.push(s);
-    }
-  });
-  stores = uniqueStores;
-
-  // Eliminar etiqueta "📝 Demo" del selector
-  const demoBadge = demoStores.some(ds => ds.id === s.id) ? ' · 🧪 Demo' : '';
-    return `<option value="${s.id}" ${s.id === storeId ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito)}${d}${st}${demoBadge}</option>`;
+    const demoBadge = demoStores.some(ds => String(ds.id) === String(s.id)) ? ' · 🧪 Demo' : '';
+    return `<option value="${s.id}" ${String(s.id) === String(storeId) ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito || s.zona || '')}${d}${st}${demoBadge}</option>`;
   }).join('');
   paintSession();
   window._all = null; loadProducts();
@@ -414,14 +425,20 @@ async function login(e) {
   errorDiv.classList.add('hidden');
   
   try {
-    // 1. Intentar API
-    const r = await fetch(apiURL('/auth/login'), { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      credentials: 'include', 
-      body: JSON.stringify({ identifier, password }) 
-    });
-    const j = await r.json().catch(() => ({}));
+    // 1. Intentar API (con timeout para no dejar el botón colgado)
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 20000);
+    let r, j;
+    try {
+      r = await fetch(apiURL('/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ identifier, password }),
+        signal: ctrl.signal
+      });
+      j = await r.json().catch(() => ({}));
+    } finally { clearTimeout(tid); }
     if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
     
     // Éxito API
@@ -441,9 +458,10 @@ async function login(e) {
     let demoStores = [];
     try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
     
-    // Buscar por teléfono o celular
-    const matchedStore = demoStores.find(s => 
-      (s.telefono === identifier || s.whatsapp === identifier || s.celular === identifier) && 
+    // Buscar por teléfono, WhatsApp o nombre de la ferretería
+    const norm = s => String(s || '').trim().toLowerCase();
+    const matchedStore = demoStores.find(s =>
+      (s.telefono === identifier || s.whatsapp === identifier || s.celular === identifier || norm(s.nombre) === norm(identifier)) &&
       s.password === password
     );
     
@@ -477,13 +495,13 @@ async function logout() {
   toast('Sesión cerrada');
 }
 function myStore() { 
-  // Primero buscar en stores (API + demo)
-  let s = stores.find(s => s.id === storeId);
+  // Primero buscar en stores (API + demo) — IDs pueden ser UUID (string) o numéricos
+  let s = stores.find(x => String(x.id) === String(storeId));
   // Si no está en stores, buscar en localStorage demo
   if (!s) {
     try {
       const demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]');
-      s = demoStores.find(ds => ds.id === storeId);
+      s = demoStores.find(ds => String(ds.id) === String(storeId));
     } catch {}
   }
   return s;
@@ -591,6 +609,7 @@ async function saveStore(e) {
     if (!r.ok) throw new Error(s.error || ('Error ' + r.status));
     
     // Éxito API
+    const storeData = s.store || s;
     if (s.accessToken) AT = s.accessToken;
     toast('¡Ferretería registrada correctamente! ✅');
     closeModal('storeModal'); 
@@ -599,9 +618,10 @@ async function saveStore(e) {
     $('#regDias').innerHTML = [1,2,3,4,5,6,0].map(d =>
       `<label class="text-[11px] bg-ferrex-bg border border-ferrex-border rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="${d}" ${[1,2,3,4,5,6].includes(d) ? 'checked' : ''} class="accent-ferrex-neon"> ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d]}</label>`).join('');
     await loadStores(); 
-    storeId = s.id; 
-    localStorage.setItem('ga_store', s.id); 
-    $('#storeSel').value = s.id;
+    storeId = storeData.id; 
+    try { localStorage.setItem('ga_store', storeId); } catch {}
+    try { localStorage.setItem('ga_active_store', JSON.stringify(storeData)); } catch {}
+    $('#storeSel').value = storeId;
     paintSession(); 
     setMode('f'); 
     loadProducts();
@@ -620,8 +640,10 @@ async function saveStore(e) {
       apertura: fd.get('apertura') || '08:00',
       cierre: fd.get('cierre') || '20:00',
       dias,
-      logo: null,
+      horario: { apertura: fd.get('apertura') || '08:00', cierre: fd.get('cierre') || '20:00', dias },
+      abierto_ahora: true,
       abierto: true,
+      logo: null,
       creado: new Date().toISOString()
     };
     
@@ -629,8 +651,10 @@ async function saveStore(e) {
       const existing = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]');
       existing.push(demoStore);
       localStorage.setItem('ga_demo_stores', JSON.stringify(existing));
+      localStorage.setItem('ga_active_store', JSON.stringify(demoStore));
     } catch {}
     
+    AT = 'demo-token-' + Date.now(); // sesión demo para habilitar el panel
     toast('¡Ferretería registrada localmente (modo demo)! ✅');
     closeModal('storeModal'); 
     form.reset(); 
@@ -639,8 +663,8 @@ async function saveStore(e) {
       `<label class="text-[11px] bg-ferrex-bg border border-ferrex-border rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" value="${d}" ${[1,2,3,4,5,6].includes(d) ? 'checked' : ''} class="accent-ferrex-neon"> ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d]}</label>`).join('');
     await loadStores(); 
     storeId = demoStore.id; 
-    localStorage.setItem('ga_store', demoStore.id); 
-    $('#storeSel').value = demoStore.id;
+    try { localStorage.setItem('ga_store', storeId); } catch {}
+    $('#storeSel').value = storeId;
     paintSession(); 
     setMode('f'); 
     loadProducts();
@@ -654,13 +678,13 @@ async function saveStore(e) {
 async function loadProducts() {
   const q = $('#q').value || '';
   let apiProducts = [];
-  const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`);
+  const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`, { timeout: 30000 });
   if (productsResult.ok) apiProducts = productsResult.data;
   
   // Cargar productos demo de localStorage solo si no hay productos de la API
   let demoProducts = [];
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
-  const storeDemoProducts = demoProducts.filter(p => p.store_id === storeId);
+  const storeDemoProducts = demoProducts.filter(p => String(p.store_id) === String(storeId));
   
   // Solo usar productos demo si no hay productos de la API
   products = apiProducts.length > 0 ? apiProducts : [...apiProducts, ...storeDemoProducts];
@@ -674,7 +698,7 @@ async function loadProducts() {
       <p class="text-[11px] text-ferrex-text-muted font-bold mt-2">${esc(p.categoria)}</p>
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       <span class="price-tag text-sm mt-1">${money(p.precio)}</span>
-      <button onclick="addCart(${p.id})" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
+      <button onclick="addCart('${p.id}')" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
     </div>`).join('') || '<div class="col-span-3 text-center py-12"><p class="text-ferrex-text-muted text-lg mb-4">📦 Sin productos disponibles</p><button onclick="scrollToNewProduct()" style="background-color: #17FF00; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer;">+ Agregar producto</button></div>';
   renderCart(); renderStock();
 }
@@ -725,7 +749,7 @@ async function renderCart() {
 }
 
 /* ---------- 1. Checkout + WhatsApp ---------- */
-function currentStore() { return stores.find(s => s.id === storeId); }
+function currentStore() { return stores.find(s => String(s.id) === String(storeId)); }
 
 function buildWhatsAppMessage(t, store) {
   const all = [...products, ...(window._all || [])];
@@ -767,8 +791,8 @@ async function sendOrder() {
   if (!$('#consent')?.checked) { toast('Aceptá las Políticas y Términos para confirmar ☑️'); $('#consent')?.focus(); return; }
 
   // Obtener tienda actual (API + demo)
-  const store = stores.find(s => s.id === storeId) ||
-    JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').find(s => s.id === storeId);
+  const store = stores.find(s => String(s.id) === String(storeId)) ||
+    JSON.parse(localStorage.getItem('ga_demo_stores') || '[]').find(s => String(s.id) === String(storeId));
 
   if (!store) {
     toast('No hay ferretería seleccionada');
@@ -1020,7 +1044,7 @@ async function loadInventory() {
   
   let demoProducts = [];
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
-  const storeProducts = demoProducts.filter(p => p.store_id === storeId);
+  const storeProducts = demoProducts.filter(p => String(p.store_id) === String(storeId));
   
   // Fetch with retry (3 attempts, 8s timeout each) + exponential backoff
   let apiProducts = [];
@@ -1284,7 +1308,9 @@ function stopRealtime() { try { es?.close(); } catch {} es = null; clearInterval
 const ST_CLS = { 'Pendiente': 'bg-cinta', 'Aceptado': 'bg-plomo text-white', 'En Camino': 'bg-blue-800 text-white', 'Listo para recojo': 'bg-blue-800 text-white', 'Completado': 'bg-listo text-plomoDark', 'Rechazado': 'bg-gray-300' };
 async function loadOrders(keepSeen) {
   try {
-    const list = await api(`/orders?store_id=${storeId}`);
+    const res = await api(`/orders?store_id=${encodeURIComponent(storeId)}`);
+    if (!res.ok) { $('#fPed').innerHTML = '<p class="text-ferrex-text-muted">Enciende el backend para ver pedidos.</p>'; return; }
+    const list = Array.isArray(res.data) ? res.data : [];
     if (!keepSeen) list.forEach(o => { if (o.status !== 'Pendiente') seenOrders.add(o.id); });
     $('#fPed').innerHTML = list.map(o => `
       <div class="bg-ferrex-card border border-ferrex-border rounded-2xl shadow p-4 ${o.status === 'Pendiente' ? 'order-new' : ''}">
@@ -1296,7 +1322,7 @@ async function loadOrders(keepSeen) {
         ${o.clientZone && (o.clientZone.label || o.clientZone.distrito) ? `<p class="text-xs font-bold text-ferrex-neon">📌 Zona: ${esc(o.clientZone.label || o.clientZone.distrito)}${o.clientZone.mode === 'gps' ? ' (GPS)' : ''}</p>` : ''}
         <div class="flex gap-2 mt-2 flex-wrap">${(NEXT[o.status] || []).map(n => {
           const hot = (o.status === 'Pendiente' && n === 'Aceptado') || (o.status === 'Aceptado');
-          return `<button onclick="setOrder(${o.id},'${n}')" class="text-xs font-extrabold px-3 py-2 rounded-xl ${hot ? 'bg-listo text-ferrex-bg' : 'bg-ferrex-border text-ferrex-text'}">${n}</button>`;
+          return `<button onclick="setOrder('${o.id}','${n}')" class="text-xs font-extrabold px-3 py-2 rounded-xl ${hot ? 'bg-listo text-ferrex-bg' : 'bg-ferrex-border text-ferrex-text'}">${n}</button>`;
         }).join('')}</div>
       </div>`).join('') || '<p class="text-ferrex-text-muted">Sin pedidos aún.</p>';
   } catch { $('#fPed').innerHTML = '<p class="text-ferrex-text-muted">Enciende el backend para ver pedidos.</p>'; }

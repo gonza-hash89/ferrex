@@ -7,16 +7,7 @@
 <meta name="description" content="Pide accesorios de ferretería, repuestos, fijaciones y herramientas pequeñas con delivery rápido (S/ 5.00) o recojo gratis en tu distrito. Conectamos vecinos con ferreterías locales en Perú.">
 <meta name="keywords" content="ferreteria, ferreteria cerca de mi, delivery ferreteria, accesorios ferreteros, pernos, teflon, gasfiteria, electricidad, Chosica, Lima, FERREX">
 <meta name="robots" content="index, follow">
-<meta name="google-site-verification" content="aq_QrbF_TJjDlPOh8j3PF0g7dwX5r1K-GsSto8GIMfI" />
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-KDCN53GM"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'GTM-KDCN53GM');
-</script>
+<meta name="google-site-verification" content="aq_QrbF_TJjDIP0h8j3PF0g7dwX5r1K-GsSto8GIMfI" />
 <meta name="theme-color" content="#0B0F12">
 <link rel="canonical" href="https://ferrex.pe/">
 <!-- Open Graph (WhatsApp / Facebook) -->
@@ -42,14 +33,14 @@
 <link rel="apple-touch-icon" href="/assets/logo-ferrex.svg">
 <link rel="sitemap" href="/sitemap.xml">
 <link rel="robots" href="/robots.txt">
-<!-- Analytics & Tracking (placeholders - replace with real IDs) -->
-<!-- Google Analytics 4 -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<!-- Analytics & Tracking -->
+<!-- Google Analytics 4 (FERREX PWA) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-KYE6HB18JN"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-XXXXXXXXXX');
+  gtag('config', 'G-KYE6HB18JN');
 </script>
 <!-- Microsoft Clarity -->
 <script>
@@ -218,6 +209,17 @@ tailwind.config = {
 </style>
 </head>
 <body class="bg-ferrex-bg text-ferrex-text font-inter antialiased">
+<!-- Toast global -->
+<div id="toast" class="hidden fixed left-1/2 bottom-24 z-[100] max-w-[90vw] px-4 py-3 rounded-2xl bg-ferrex-card border border-ferrex-neon text-ferrex-text text-sm font-bold shadow-2xl text-center pointer-events-none" role="status" aria-live="polite"></div>
+
+<!-- Barra de cookies -->
+<div id="cookieBar" class="hidden fixed left-0 right-0 z-[90] px-3">
+  <div class="max-w-3xl mx-auto bg-ferrex-card border border-ferrex-border rounded-2xl p-3 flex items-center gap-3 text-xs text-ferrex-text-dim shadow-xl">
+    <span class="flex-1">Usamos almacenamiento local para tu zona, carrito y sesión. Al continuar aceptás nuestras políticas.</span>
+    <button onclick="openModal('privModal')" class="font-bold underline text-ferrex-neon whitespace-nowrap">Políticas</button>
+    <button onclick="acceptCookies()" class="btn-primary px-3 py-2 rounded-xl text-xs whitespace-nowrap">Aceptar ✅</button>
+  </div>
+</div>
 <a href="#vCli" class="skip">Saltar al catálogo</a>
 <header class="bg-ferrex-bg-alt/95 backdrop-blur-sm border-b border-ferrex-border sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
@@ -233,7 +235,7 @@ tailwind.config = {
       <span class="text-ferrex-neon">📍</span><span id="locLbl" class="truncate text-ferrex-text">Selecciona tu zona</span><span class="text-ferrex-text-muted">▾</span>
     </button>
     <select id="storeSel" onchange="onStoreChange()" aria-label="Ferretería" class="input-dark rounded-xl px-3 py-2 text-sm font-semibold max-w-[240px] bg-ferrex-card border-ferrex-border"></select>
-    <button onclick="openModal('storeForm')" class="btn-secondary text-sm font-bold px-3 py-2 rounded-xl">+ Mi ferretería</button>
+    <button onclick="openModal('storeModal')" class="btn-secondary text-sm font-bold px-3 py-2 rounded-xl">+ Mi ferretería</button>
     <div class="flex-1"></div>
     <input id="q" oninput="loadProducts()" placeholder="Buscar: teflón, foco…" aria-label="Buscar" class="input-dark rounded-xl px-3 py-2 text-sm w-56 bg-ferrex-card border-ferrex-border">
     <div class="bg-ferrex-card border border-ferrex-border rounded-xl p-1 text-xs font-bold flex">
@@ -345,6 +347,7 @@ tailwind.config = {
   <div id="fStk" class="hidden bg-ferrex-card border border-ferrex-border rounded-2xl shadow-xl divide-y divide-ferrex-border mt-4"></div>
   <div id="fInv" class="hidden mt-4"></div>
 </div>
+</div>
 
 <!-- MODAL UBICACIÓN HÍBRIDA -->
 <div id="locModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('locModal')"></div>
@@ -370,10 +373,12 @@ tailwind.config = {
 </div></div></div>
 
 <!-- Cargar app.js -->
-<script src="app.js"></script>
-</body>
-</html>
-<div class="absolute inset-0 grid place-items-center p-4 overflow-auto hidden"><form id="storeForm" class="bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-2 relative overflow-y-auto" onsubmit="saveStore(event)">
+
+<!-- MODAL REGISTRO FERRETERÍA -->
+<div id="storeModal" class="hidden fixed inset-0 z-50">
+<div class="absolute inset-0 bg-black/70" onclick="closeModal('storeModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto">
+<form id="storeForm" class="relative bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-2 max-h-[90vh] overflow-y-auto" onsubmit="saveStore(event)">
 <button type="button" onclick="closeModal('storeModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
 <h3 class="font-black text-lg text-ferrex-text">🏪 Registrar mi ferretería</h3>
 <input name="nombre" required minlength="3" maxlength="80" placeholder="Nombre: Ferretería Los Alisos" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
@@ -413,6 +418,29 @@ tailwind.config = {
 <div id="storeFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
 <button type="submit" class="w-full btn-primary py-2.5" id="storeSubmitBtn">Guardar ferretería ✅</button>
 </form></div></div>
+
+<!-- MODAL LOGIN FERRETERÍA -->
+<div id="loginModal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Iniciar sesión ferretería">
+<div class="absolute inset-0 bg-black/70" onclick="closeModal('loginModal')"></div>
+<div class="absolute inset-0 grid place-items-center p-4 overflow-auto">
+<form class="relative bg-ferrex-card border border-ferrex-border rounded-2xl p-5 w-full max-w-md space-y-3" onsubmit="login(event)">
+<button type="button" onclick="closeModal('loginModal')" class="absolute top-3 right-3 text-2xl text-ferrex-text-muted hover:text-ferrex-neon font-bold leading-none" aria-label="Cerrar">✕</button>
+<h3 class="font-black text-lg text-ferrex-text">🔐 Entrar a mi ferretería</h3>
+<p class="text-xs text-ferrex-text-dim">Usá el celular registrado y tu contraseña de tienda.</p>
+<div id="loginFormError" class="hidden text-xs text-ferrex-danger bg-ferrex-danger/10 border border-ferrex-danger/20 rounded-xl p-2"></div>
+<div>
+<label class="block text-xs font-semibold text-ferrex-text-dim mb-1">Celular o WhatsApp</label>
+<input name="identifier" required inputmode="numeric" autocomplete="username" placeholder="9XX XXX XXX" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
+</div>
+<div>
+<label class="block text-xs font-semibold text-ferrex-text-dim mb-1">Contraseña</label>
+<input name="password" type="password" required autocomplete="current-password" placeholder="••••••" class="input-dark w-full rounded-xl px-3 py-2 text-sm">
+</div>
+<button type="submit" id="loginSubmitBtn" class="w-full btn-primary py-2.5 rounded-xl text-sm">Entrar →</button>
+<button type="button" onclick="closeModal('loginModal'); openModal('storeModal')" class="w-full text-xs font-bold text-ferrex-text-dim hover:text-ferrex-neon">¿No tenés tienda? Registrala acá →</button>
+</form>
+</div>
+</div>
 
 <!-- MODAL PRODUCTO -->
 <div id="prodModal" class="hidden fixed inset-0 z-50"><div class="absolute inset-0 bg-black/70" onclick="closeModal('prodModal')"></div>
@@ -670,3 +698,8 @@ tailwind.config = {
 </div>
 </div>
 </div></div></div>
+
+<!-- Cargar app.js al final para que el DOM ya exista -->
+<script src="app.js"></script>
+</body>
+</html>
