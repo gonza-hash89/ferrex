@@ -220,7 +220,8 @@ tailwind.config = {
     <button onclick="openLoc()" id="locBtn" aria-label="Mi ubicación" class="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/15 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold max-w-[230px] transition-colors">
       <span class="text-ferrex-neon">📍</span><span id="locLbl" class="truncate">Selecciona tu zona</span><span class="text-white/50">▾</span>
     </button>
-    <select id="storeSel" onchange="onStoreChange()" aria-label="Ferretería" class="bg-white/10 border border-white/15 text-white rounded-xl px-3 py-2 text-xs sm:text-sm font-bold max-w-[220px] outline-none focus:ring-2 focus:ring-ferrex-neon"></select>
+    <button onclick="openSuperAdminModal()" aria-label="Panel SuperAdmin" title="Panel SuperAdmin" class="flex items-center gap-1.5 bg-ferrex-neon/15 hover:bg-ferrex-neon/25 border border-ferrex-neon/50 text-ferrex-neon px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition-colors shadow-[0_0_12px_rgba(23,255,0,0.15)]">🛡️ <span>SuperAdmin</span></button>
+    <select id="storeSel" onchange="onStoreChange()" aria-label="Ferretería" class="hidden bg-white/10 border border-white/15 text-white rounded-xl px-3 py-2 text-xs sm:text-sm font-bold max-w-[220px] outline-none focus:ring-2 focus:ring-ferrex-neon"></select>
     <button onclick="openModal('storeModal')" class="bg-white/10 hover:bg-white/15 border border-white/15 text-xs sm:text-sm font-bold px-3 py-2 rounded-xl">+ Mi ferretería</button>
     <span class="flex-1"></span>
     <div class="flex sm:hidden bg-white/10 rounded-xl p-1 text-xs font-bold" role="group" aria-label="Cambiar vista">

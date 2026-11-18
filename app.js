@@ -14,8 +14,9 @@ let storeId = localStorage.getItem('ga_store') || 1;
 let soundOn = localStorage.getItem('ga_sound') !== 'off';
 let seenOrders = new Set(), es = null, pollTimer = null, audioCtx = null;
 const CATS = ['Todo', 'Electricidad', 'Gasfitería', 'Fijaciones', 'Herramientas', 'Pinturas', 'Candados'];
-const SHIPPING_RATE = 0.15; // 15% del subtotal
+const SHIPPING_RATE = 0.15; // 15% del subtotal, solo en delivery
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100; // redondeo monetario a 2 decimales
 const NEXT = { 'Pendiente': ['Aceptado', 'Rechazado'], 'Aceptado': ['En Camino', 'Listo para recojo', 'Completado'], 'En Camino': ['Completado'], 'Listo para recojo': ['Completado'] };
 const $ = s => document.querySelector(s);
 const money = n => 'S/ ' + Number(n).toFixed(2);
@@ -360,8 +361,13 @@ async function loadStores() {
   if (loc && loc.mode === 'gps' && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) qs = `?lat=${loc.lat}&lng=${loc.lng}`;
   else if (loc && loc.mode === 'manual' && loc.distrito) qs = `?distrito=${encodeURIComponent(loc.distrito)}`;
   let apiStores = [];
-  const storesResult = await api('/stores' + qs, { timeout: 30000 });
-  if (storesResult.ok) apiStores = storesResult.data;
+  // 2 intentos: Render free tier puede tardar en despertar (cold start)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const storesResult = await api('/stores' + qs, { timeout: 30000 });
+    if (storesResult.ok) { apiStores = Array.isArray(storesResult.data) ? storesResult.data : []; break; }
+    console.warn(`Tiendas: intento ${attempt}/2 falló:`, storesResult.error);
+    if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
+  }
   // Incluir tiendas demo de localStorage
   let demoStores = [];
   try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
@@ -386,12 +392,18 @@ async function loadStores() {
     storeId = stores[0]?.id || 1;
     try { localStorage.setItem('ga_store', storeId); } catch {}
   }
-  $('#storeSel').innerHTML = stores.map(s => {
-    const d = s.distance_km != null ? ` · a ${s.distance_km} km (~${s.eta_min} min)` : '';
-    const st = s.abierto_ahora === false ? ' · 🔴 Cerrado' : '';
-    const demoBadge = demoStores.some(ds => String(ds.id) === String(s.id)) ? ' · 🧪 Demo' : '';
-    return `<option value="${s.id}" ${String(s.id) === String(storeId) ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito || s.zona || '')}${d}${st}${demoBadge}</option>`;
-  }).join('');
+  const sel = $('#storeSel');
+  if (sel) {
+    sel.innerHTML = stores.map(s => {
+      const d = s.distance_km != null ? ` · a ${s.distance_km} km (~${s.eta_min} min)` : '';
+      const st = s.abierto_ahora === false ? ' · 🔴 Cerrado' : '';
+      const demoBadge = demoStores.some(ds => String(ds.id) === String(s.id)) ? ' · 🧪 Demo' : '';
+      return `<option value="${s.id}" ${String(s.id) === String(storeId) ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito || s.zona || '')}${d}${st}${demoBadge}</option>`;
+    }).join('');
+    // Si no hay tiendas, ocultamos el select vacío (el botón SuperAdmin ocupa ese lugar)
+    sel.classList.toggle('hidden', stores.length === 0);
+    if (stores.length && stores.some(s => String(s.id) === String(storeId))) sel.value = String(storeId);
+  }
   paintSession();
   paintStoreCards();
   window._all = null; loadProducts();
@@ -813,8 +825,14 @@ async function loadProducts() {
   let apiProducts = [];
   // Las tiendas demo tienen ids numéricos: la API sólo entiende UUID
   if (UUID_RE.test(String(storeId))) {
-    const productsResult = await api(`/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`, { timeout: 30000 });
-    if (productsResult.ok) apiProducts = productsResult.data;
+    const url = `/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`;
+    // 2 intentos para tolerar el cold start inicial de Render
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const productsResult = await api(url, { timeout: 30000 });
+      if (productsResult.ok) { apiProducts = Array.isArray(productsResult.data) ? productsResult.data : []; break; }
+      console.warn(`Productos: intento ${attempt}/2 falló:`, productsResult.error);
+      if (attempt < 2) await new Promise(r => setTimeout(r, 800));
+    }
   }
   
   // Cargar productos demo de localStorage solo si no hay productos de la API
@@ -866,8 +884,10 @@ function totals() {
     if (p) { s += Number(p.precio_oferta || p.precio) * q; n += q; }
   }
   const del = document.querySelector('input[name=del]:checked')?.value !== 'recojo';
-  const ship = n === 0 ? 0 : (del ? s * SHIPPING_RATE : 0);
-  return { sub: s, n, ship, total: s + ship, del };
+  const sub = round2(s);
+  // Recojo: envío gratis. Delivery: 15% del subtotal, redondeado a 2 decimales.
+  const ship = (n === 0 || !del) ? 0 : round2(sub * SHIPPING_RATE);
+  return { sub, n, ship, total: round2(sub + ship), del };
 }
 async function renderCart() {
   if (!window._all) { 
@@ -899,7 +919,11 @@ async function renderCart() {
         </div>
       </div>`; }).join('');
   const subT = $('#subT'); if (subT) subT.textContent = money(t.sub);
-  const shT = $('#shT'); if (shT) shT.textContent = t.n === 0 ? '—' : (t.del ? `${money(t.ship)}` : 'Gratis (recojo en tienda)');
+  const shT = $('#shT'); if (shT) {
+    if (t.n === 0) shT.textContent = '—';
+    else if (!t.del) shT.textContent = 'Gratis 🎉';
+    else shT.textContent = money(t.ship);
+  }
   const toT = $('#toT'); if (toT) toT.textContent = money(t.total);
 }
 
@@ -919,9 +943,10 @@ function buildWhatsAppMessage(t, store) {
   
   const paymentText = `💳 Pago: ${pay}`;
   const subtotal = t.sub;
-  const shipping = t.del ? t.ship : 0;
-  
-  return `📋 *Nuevo Pedido FERREX*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n🚚 Envío: S/ ${shipping.toFixed(2)}\n*Total a pagar: S/ ${t.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
+  const shipping = t.del ? round2(t.ship) : 0;
+  const shippingLine = t.del ? `🚚 Envío: S/ ${shipping.toFixed(2)}` : '🚚 Envío: Gratis 🎉';
+
+  return `📋 *Nuevo Pedido FERREX*\n${itemsText}\n${deliveryText}\n${paymentText}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n${shippingLine}\n*Total a pagar: S/ ${t.total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
 }
 
 function normalizePhone(phone) {
@@ -983,6 +1008,9 @@ async function sendOrder() {
   const body = {
     store_id: String(storeId),
     items,
+    subtotal: t.sub,
+    shipping: t.ship,
+    envio_costo: t.ship,
     total: t.total,
     pay,
     address: $('#addr')?.value.trim() || '',

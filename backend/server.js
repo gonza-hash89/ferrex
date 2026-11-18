@@ -157,6 +157,9 @@ function normalizeWhatsapp(v) {
 }
 
 // Construye el mensaje de WhatsApp para un pedido
+function round2(n) {
+  return Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
+}
 function buildWhatsAppMessage(pedido, store) {
   const items = Array.isArray(pedido.items) ? pedido.items : [];
   const itemsText = items.map(i => `• ${i.qty}x ${i.nombre} - S/ ${Number(i.price || 0).toFixed(2)}`).join('\n');
@@ -168,7 +171,8 @@ function buildWhatsAppMessage(pedido, store) {
   const subtotal = Number(pedido.subtotal || 0);
   const shipping = Number(pedido.shipping != null ? pedido.shipping : pedido.envio_costo || 0);
   const total = Number(pedido.total || 0);
-  return `📋 *Nuevo Pedido ${pedido.codigo || pedido.code || ''}*\n${itemsText}\n${deliveryText}\n💳 Pago: ${pay}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n🚚 Envío: S/ ${shipping.toFixed(2)}\n*Total a pagar: S/ ${total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
+  const shippingLine = esDelivery ? `🚚 Envío: S/ ${shipping.toFixed(2)}` : '🚚 Envío: Gratis 🎉';
+  return `📋 *Nuevo Pedido ${pedido.codigo || pedido.code || ''}*\n${itemsText}\n${deliveryText}\n💳 Pago: ${pay}\n💰 Subtotal: S/ ${subtotal.toFixed(2)}\n${shippingLine}\n*Total a pagar: S/ ${total.toFixed(2)}*\n\n_Ferretería: ${store?.nombre || 'FERREX'}_`;
 }
 function sendError(res, status, message, details) {
   return res.status(status).json({ ok: false, error: message, ...(details ? { details } : {}) });
@@ -537,8 +541,8 @@ app.post('/api/orders', vOrder, checkValidation, async (req, res) => {
     });
     
     const subtotal = cleanItems.reduce((a, i) => a + i.price * i.qty, 0);
-    const shipping = req.body.delivery === 'delivery' ? subtotal * 0.15 : 0;
-    const total = subtotal + shipping;
+    const shipping = (delivery || 'delivery') === 'delivery' ? round2(subtotal * 0.15) : 0;
+    const total = round2(subtotal + shipping);
     
     // Crear pedido en BD
     const pedido = await dbServices.createPedido({
