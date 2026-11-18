@@ -140,7 +140,7 @@ async function createProducto(data) {
     INSERT INTO productos (ferreteria_id, codigo, nombre, categoria, precio, precio_oferta, stock_qty, stock, foto_base64, categoria_enum)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     RETURNING *
-  `, [ferreteria_id, codigo, nombre, categoria, precio, precio_oferta, stock_qty || 0, stock !== false, null, categoria_enum]);
+  `, [ferreteria_id, codigo, nombre, categoria, precio, precio_oferta, stock_qty || 0, stock !== false, foto_base64 || null, categoria_enum]);
   
   return result.rows[0];
 }
