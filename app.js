@@ -11,6 +11,7 @@ const API_BASE = (localStorage.getItem('ga_api') || window.GA_API || ENV_API || 
 function apiURL(p) { return API_BASE + '/api' + p; }
 let activeCat = 'Todo', pay = 'Efectivo';
 let storeId = localStorage.getItem('ga_store') || 1;
+let storesApiOk = true; // false cuando la API de tiendas no respondió tras los reintentos
 let soundOn = localStorage.getItem('ga_sound') !== 'off';
 let seenOrders = new Set(), es = null, pollTimer = null, audioCtx = null;
 const CATS = ['Todo', 'Electricidad', 'Gasfitería', 'Fijaciones', 'Herramientas', 'Pinturas', 'Candados'];
@@ -145,13 +146,8 @@ async function api(path, opts = {}) {
     if (!r.ok || j.ok === false) throw new Error(j.error || ('Error ' + r.status));
     return { ok: true, data: j };
   } catch (err) {
-    console.warn('API no disponible, usando modo demo:', err.message);
-    // Mostrar estado de conexión
-    const statusEl = document.getElementById('apiStat');
-    if (statusEl) {
-      statusEl.textContent = '• Modo local / demo (sin conexión)';
-      statusEl.className = 'text-center text-[11px] py-1 bg-ferrex-warning/15 text-ferrex-warning font-bold';
-    }
+    // Falla silenciosa: nunca mostrar "modo demo", "modo local" ni "sin conexión"
+    console.debug('API no disponible:', err.message);
     return { ok: false, error: err.message, demo: true };
   } finally {
     // Cleanup timeout if fetch completed before abort
@@ -271,21 +267,12 @@ async function init() {
   }
 
   // Estado de la API en segundo plano: NO bloquea el render de tiendas/catálogo
+  // y NO escribe ningún cartel en pantalla (sin "modo demo" ni "sin conexión").
   (async () => {
     const healthResult = await checkHealthWithRetry();
-    const stat = $('#apiStat');
-    if (!stat) return;
     if (healthResult.ok) {
-      const h = healthResult.data;
-      stat.innerHTML = `• API conectada v${h.version || ''} · ${API_BASE ? esc(API_BASE) : 'mismo origen'}`;
-      stat.className = 'text-center text-[11px] py-1 bg-ferrex-neon text-ferrex-bg-alt font-bold';
-      localStorage.removeItem('ga_demo_mode');
+      try { localStorage.removeItem('ga_demo_mode'); } catch {}
       startHealthCheckPing(); // Ping en segundo plano para mantener Render despierto
-    } else {
-      // API no disponible - modo demo silencioso, NO mostrar error rojo
-      stat.innerHTML = `• Modo offline (localStorage)`;
-      stat.className = 'text-center text-[11px] py-1 bg-ferrex-warning/15 text-ferrex-warning font-bold';
-      stopHealthCheckPing();
     }
   })();
 
@@ -361,24 +348,27 @@ async function loadStores() {
   if (loc && loc.mode === 'gps' && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) qs = `?lat=${loc.lat}&lng=${loc.lng}`;
   else if (loc && loc.mode === 'manual' && loc.distrito) qs = `?distrito=${encodeURIComponent(loc.distrito)}`;
   let apiStores = [];
+  let apiOk = false;
   // 2 intentos: Render free tier puede tardar en despertar (cold start)
   for (let attempt = 1; attempt <= 2; attempt++) {
     const storesResult = await api('/stores' + qs, { timeout: 30000 });
-    if (storesResult.ok) { apiStores = Array.isArray(storesResult.data) ? storesResult.data : []; break; }
-    console.warn(`Tiendas: intento ${attempt}/2 falló:`, storesResult.error);
+    if (storesResult.ok) { apiStores = Array.isArray(storesResult.data) ? storesResult.data : []; apiOk = true; break; }
+    console.debug(`Tiendas: intento ${attempt}/2 falló:`, storesResult.error);
     if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
   }
-  // Incluir tiendas demo de localStorage
+  // Incluir tiendas demo de localStorage (solo desarrollo local; nunca se etiquetan en pantalla)
   let demoStores = [];
   try { demoStores = JSON.parse(localStorage.getItem('ga_demo_stores') || '[]'); } catch {}
+  storesApiOk = apiOk;
   stores = [...apiStores, ...demoStores];
   // Filtrar por distrito si hay ubicación manual
   if (loc && loc.mode === 'manual' && loc.distrito) {
     stores = stores.filter(s => s.distrito === loc.distrito);
   }
-  if (!stores.length) { 
-    toast(`Sin ferreterías en ${loc?.distrito || 'tu zona'} — registra la tuya`); 
+  if (!stores.length) {
     stores = [...apiStores, ...demoStores]; // mostrar todas si filtro no da resultados
+    // Solo avisar cuando la API respondió de verdad y no hay ninguna ferretería
+    if (apiOk && !stores.length) toast(`Sin ferreterías en ${loc?.distrito || 'tu zona'} — registra la tuya`);
   }
   // Deduplicar ferreterías por ID (evitar registros duplicados)
   const seenIds = new Set();
@@ -397,8 +387,7 @@ async function loadStores() {
     sel.innerHTML = stores.map(s => {
       const d = s.distance_km != null ? ` · a ${s.distance_km} km (~${s.eta_min} min)` : '';
       const st = s.abierto_ahora === false ? ' · 🔴 Cerrado' : '';
-      const demoBadge = demoStores.some(ds => String(ds.id) === String(s.id)) ? ' · 🧪 Demo' : '';
-      return `<option value="${s.id}" ${String(s.id) === String(storeId) ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito || s.zona || '')}${d}${st}${demoBadge}</option>`;
+      return `<option value="${s.id}" ${String(s.id) === String(storeId) ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.distrito || s.zona || '')}${d}${st}</option>`;
     }).join('');
     // Si no hay tiendas, ocultamos el select vacío (el botón SuperAdmin ocupa ese lugar)
     sel.classList.toggle('hidden', stores.length === 0);
@@ -408,6 +397,11 @@ async function loadStores() {
   paintStoreCards();
   window._all = null; loadProducts();
 }
+async function retryLoad() {
+  await loadStores();
+  await loadProducts();
+}
+window.retryLoad = retryLoad;
 function onStoreChange() {
   const val = $('#storeSel').value;
   const st = stores.find(s => String(s.id) === String(val));
@@ -425,6 +419,19 @@ function storeEmoji(i) { return ['🔩💡🔒', '🚿🎨🔧', '🪛🧰🔌',
 function paintStoreCards() {
   const hero = $('#heroStores');
   if (hero) {
+    const heroEmpty = !storesApiOk
+      ? `<div class="bg-white text-ferrex-text rounded-2xl p-4 shadow-pop sm:col-span-2">
+      <p class="text-xs font-black text-ferrex-text-dim">● CATÁLOGO</p>
+      <h3 class="font-extrabold mt-1">Estamos cargando las ferreterías de tu zona</h3>
+      <p class="text-xs text-ferrex-text-dim mt-1">Volvé a intentar en unos segundos.</p>
+      <button onclick="retryLoad()" class="mt-3 w-full btn-primary font-bold py-2 rounded-xl text-sm">Reintentar</button>
+    </div>`
+      : `<div class="bg-white text-ferrex-text rounded-2xl p-4 shadow-pop sm:col-span-2">
+      <p class="text-xs font-black text-ferrex-neon-dim">● SUMATE AL PILOTO</p>
+      <h3 class="font-extrabold mt-1">Todavía no hay ferreterías en tu zona</h3>
+      <p class="text-xs text-ferrex-text-dim mt-1">Registrá tu ferretería y aparecé en el catálogo de FERREX.</p>
+      <button onclick="openModal('storeModal')" class="mt-3 w-full btn-primary font-bold py-2 rounded-xl text-sm">Registrar mi ferretería</button>
+    </div>`;
     hero.innerHTML = stores.slice(0, 2).map((s, i) => {
       const open = s.abierto_ahora !== false;
       const dist = s.distance_km != null ? ` · A ${s.distance_km} KM` : '';
@@ -436,12 +443,7 @@ function paintStoreCards() {
         <div class="mt-2 text-4xl">${storeEmoji(i)}</div>
         <button onclick="pickStore('${esc(s.id)}')" class="mt-3 w-full ${i === 0 ? 'btn-primary' : 'bg-plomo text-white'} font-bold py-2 rounded-xl text-sm">Pedir aquí</button>
       </div>`;
-    }).join('') || `<div class="bg-white text-ferrex-text rounded-2xl p-4 shadow-pop sm:col-span-2">
-      <p class="text-xs font-black text-ferrex-neon-dim">● SUMATE AL PILOTO</p>
-      <h3 class="font-extrabold mt-1">Todavía no hay ferreterías en tu zona</h3>
-      <p class="text-xs text-ferrex-text-dim mt-1">Registrá tu ferretería y aparecé en el catálogo de FERREX.</p>
-      <button onclick="openModal('storeModal')" class="mt-3 w-full btn-primary font-bold py-2 rounded-xl text-sm">Registrar mi ferretería</button>
-    </div>`;
+    }).join('') || heroEmpty;
   }
   const list = $('#tiendasList');
   if (list) {
@@ -453,7 +455,9 @@ function paintStoreCards() {
         <b class="text-ferrex-text">${esc(short)}</b><br>
         <span class="text-[11px] text-ferrex-text-muted">${dist}${s.abierto_ahora === false ? 'Cerrado' : 'Abierto'}</span>
       </button>`;
-    }).join('') || `<button onclick="openModal('storeModal')" class="w-full text-left p-2 rounded-xl border-2 border-dashed border-ferrex-border text-ferrex-text-dim text-xs">+ Registrá la primera ferretería</button>`;
+    }).join('') || (storesApiOk
+      ? `<button onclick="openModal('storeModal')" class="w-full text-left p-2 rounded-xl border-2 border-dashed border-ferrex-border text-ferrex-text-dim text-xs">+ Registrá la primera ferretería</button>`
+      : `<button onclick="retryLoad()" class="w-full text-left p-2 rounded-xl border-2 border-dashed border-ferrex-border text-ferrex-text-dim text-xs">Reintentar</button>`);
   }
   const lbl = $('#storeLbl');
   if (lbl) {
@@ -680,7 +684,7 @@ async function saveSchedule() {
         localStorage.setItem('ga_demo_stores', JSON.stringify(demos));
       } catch {}
       paintSession();
-      toast('Horario guardado localmente ✅');
+      toast('Horario guardado ✅');
       return;
     }
     // Releer tiendas para obtener el formato público (horario, abierto_ahora)
@@ -799,7 +803,7 @@ async function saveStore(e) {
     } catch {}
     
     AT = 'demo-token-' + Date.now(); // sesión demo para habilitar el panel
-    toast('¡Ferretería registrada localmente (modo demo)! ✅');
+    toast('¡Ferretería registrada! ✅');
     closeModal('storeModal'); 
     form.reset(); 
     $('#logoPrev').classList.add('hidden');
@@ -822,15 +826,23 @@ async function saveStore(e) {
 async function loadProducts() {
   const qEl = $('#q');
   const q = qEl ? (qEl.value || '') : '';
+  const isApiStore = UUID_RE.test(String(storeId));
+  const apiUnreachable = !storesApiOk && !stores.length; // no hay tiendas porque la API no respondió
   let apiProducts = [];
+  let apiOk = !isApiStore && !apiUnreachable;
+  const grid = $('#grid');
+  // Placeholder neutro mientras llegan los datos (cold start de Render)
+  if (grid && (isApiStore || apiUnreachable)) {
+    grid.innerHTML = `<div class="col-span-full text-center py-12"><p class="text-ferrex-text-muted text-sm animate-pulse">Cargando catálogo…</p></div>`;
+  }
   // Las tiendas demo tienen ids numéricos: la API sólo entiende UUID
-  if (UUID_RE.test(String(storeId))) {
+  if (isApiStore) {
     const url = `/products?store_id=${storeId}&q=${encodeURIComponent(q)}${activeCat !== 'Todo' ? '&cat=' + encodeURIComponent(activeCat) : ''}`;
     // 2 intentos para tolerar el cold start inicial de Render
     for (let attempt = 1; attempt <= 2; attempt++) {
       const productsResult = await api(url, { timeout: 30000 });
-      if (productsResult.ok) { apiProducts = Array.isArray(productsResult.data) ? productsResult.data : []; break; }
-      console.warn(`Productos: intento ${attempt}/2 falló:`, productsResult.error);
+      if (productsResult.ok) { apiProducts = Array.isArray(productsResult.data) ? productsResult.data : []; apiOk = true; break; }
+      console.debug(`Productos: intento ${attempt}/2 falló:`, productsResult.error);
       if (attempt < 2) await new Promise(r => setTimeout(r, 800));
     }
   }
@@ -850,8 +862,9 @@ async function loadProducts() {
   const catSide = $('#catSide');
   if (catSide) catSide.innerHTML = CATS.map(c => `<button onclick="activeCat='${c}';loadProducts()" class="w-full text-left px-3 py-2 rounded-xl text-sm font-bold ${activeCat === c ? 'bg-ferrex-bg-alt text-white' : 'text-ferrex-text-dim hover:bg-ferrex-bg'}">${c}</button>`).join('');
 
-  const grid = $('#grid');
-  if (grid) grid.innerHTML = products.filter(p => p.stock).map(p => `
+  if (grid) {
+    const visibles = products.filter(p => p.stock);
+    const cards = visibles.map(p => `
     <div class="product-card">
       ${p.foto_base64 ? `<img src="${p.foto_base64}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
         : p.foto_url ? `<img src="${absImg(p.foto_url)}" alt="${esc(p.nombre)}" loading="lazy" onerror="imgFallback(this)">`
@@ -860,11 +873,19 @@ async function loadProducts() {
       <h3 class="font-extrabold text-sm leading-tight text-ferrex-text">${esc(p.nombre)}</h3>
       ${priceHtml(p, 'mt-1')}
       <button onclick="addCart('${esc(p.id)}')" class="w-full mt-2 btn-primary py-2 rounded-xl text-sm">Agregar al carrito</button>
-    </div>`).join('') || `<div class="col-span-full text-center py-12 bg-ferrex-card border border-dashed border-ferrex-border rounded-2xl">
+    </div>`).join('');
+    const retryHtml = `<div class="col-span-full text-center py-12 bg-ferrex-card border border-dashed border-ferrex-border rounded-2xl">
+      <p class="text-ferrex-text-muted text-lg mb-1">📦 El catálogo está tardando en cargar</p>
+      <p class="text-xs text-ferrex-text-muted mb-4">Volvé a intentar en unos segundos.</p>
+      <button onclick="loadProducts()" class="btn-primary px-5 py-2.5 rounded-xl text-sm">Reintentar</button>
+    </div>`;
+    const emptyHtml = `<div class="col-span-full text-center py-12 bg-ferrex-card border border-dashed border-ferrex-border rounded-2xl">
       <p class="text-ferrex-text-muted text-lg mb-1">📦 Sin productos disponibles</p>
       <p class="text-xs text-ferrex-text-muted mb-4">Si sos ferretero, publicá tu primer producto con foto.</p>
       <button onclick="scrollToNewProduct()" class="btn-primary px-5 py-2.5 rounded-xl text-sm">+ Agregar producto</button>
     </div>`;
+    grid.innerHTML = cards || (apiOk ? emptyHtml : retryHtml);
+  }
   renderCart(); renderStock();
 }
 function addCart(id) { cart[id] = (cart[id] || 0) + 1; renderCart(); toast('Agregado ✓'); }
@@ -1184,7 +1205,7 @@ async function saveProduct(e) {
     demoProducts.push(productData);
     localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
     
-    toast('Producto publicado localmente (modo demo) ✅');
+    toast('Producto publicado ✅');
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
@@ -1226,7 +1247,7 @@ async function delProduct(id) {
   }
   window._all = null;
   loadProducts();
-  toast(ok ? 'Producto eliminado ✅' : 'Producto eliminado localmente 🗑️');
+  toast('Producto eliminado ✅');
 }
 function renderStock() {
   const el = $('#fStk');
@@ -1380,7 +1401,7 @@ async function addInventoryProduct(e) {
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
     demoProducts.push(productData);
     localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
-    toast('Producto agregado localmente (modo demo) ✅');
+    toast('Producto agregado ✅');
 } finally {
       submitBtn.disabled = false;
       submitBtn.innerHTML = originalText;
@@ -1439,7 +1460,7 @@ async function updateInventoryField(id, field, value) {
   }
   const savedLocal = updateDemoProduct(id, field, value);
   if (savedRemote) toast('Actualizado ✅');
-  else if (savedLocal) toast('Actualizado localmente ✅');
+  else if (savedLocal) toast('Actualizado ✅');
   else toast('No se pudo actualizar ⚠️');
   loadInventory();
 }
@@ -1459,7 +1480,7 @@ async function toggleInventoryStock(id, newStock) {
   const savedLocal = updateDemoProduct(id, 'stock', stock);
   loadInventory();
   if (savedRemote) toast(stock ? 'Producto disponible ✅' : 'Producto sin stock ❌');
-  else if (savedLocal) toast(stock ? 'Disponible localmente ✅' : 'Sin stock localmente ❌');
+  else if (savedLocal) toast(stock ? 'Disponible ✅' : 'Sin stock ❌');
 }
 
 async function deleteInventoryProduct(id) {
@@ -1474,7 +1495,7 @@ async function deleteInventoryProduct(id) {
   try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
   demoProducts = demoProducts.filter(p => String(p.id) !== String(id));
   try { localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts)); } catch {}
-  toast(removedRemote ? 'Producto eliminado ✅' : 'Producto eliminado localmente ✅');
+  toast('Producto eliminado ✅');
   window._all = null;
   loadInventory();
   loadProducts();
