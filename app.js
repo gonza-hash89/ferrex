@@ -229,6 +229,12 @@ function handleDeepLink(extraDistritos = []) {
 }
 async function init() {
   paintSoundBtn(); paintLoc(); handleDeepLink(); initLegal(); applyShippingUI();
+
+  // Restaurar el access token (15 min, solo en memoria) desde la cookie httpOnly.
+  // Sin esto, al recargar la página la ferretería parecía logueada pero el POST
+  // de productos salía sin Authorization y fallaba con 401.
+  // En paralelo para no demorar el catálogo; los guardados reintentan el refresh.
+  restoreSession();
   
 // Ping silencioso en segundo plano para mantener Render despierto
   let healthCheckInterval = null;
@@ -528,14 +534,50 @@ function needAuth(fn) {
   if (!AT && !localStorage.getItem('ga_active_store')) { toast('Inicia sesión como ferretería 🔐'); openModal('loginModal'); return; }
   fn();
 }
-async function tryRefresh() {
-  const r = await fetch(apiURL('/auth/refresh'), { method: 'POST', credentials: 'include' });
-  if (!r.ok) return false;
-  const j = await r.json().catch(() => ({}));
-  if (!j.accessToken) return false;
-  AT = j.accessToken;
-  return true;
+async function refreshAccess() {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 30000);
+    let r;
+    try {
+      r = await fetch(apiURL('/auth/refresh'), { method: 'POST', credentials: 'include', signal: ctrl.signal });
+    } finally { clearTimeout(tid); }
+    // 401 = el refresh ya no sirve (vencido/cerrado). Otros códigos o red = incierto.
+    if (!r.ok) return r.status === 401 ? 'expired' : 'error';
+    const j = await r.json().catch(() => ({}));
+    if (!j.accessToken) return 'error';
+    AT = j.accessToken;
+    return 'ok';
+  } catch {
+    return 'error';
+  }
 }
+async function tryRefresh() {
+  return (await refreshAccess()) === 'ok';
+}
+// Recupera la sesión al cargar la página. Solo se intenta si este navegador
+// tenía una ferretería real activa (evita pedidos de refresh innecesarios).
+async function restoreSession() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('ga_active_store') || 'null'); } catch {}
+  if (!saved || !UUID_RE.test(String(saved.id || ''))) return false;
+  const status = await refreshAccess();
+  if (status === 'ok') {
+    // Refrescar los datos de la tienda (nombre/horario pudieron cambiar)
+    const me = await api('/auth/me', { headers: authHeaders(), timeout: 30000 });
+    if (me.ok && me.data?.id) {
+      try { localStorage.setItem('ga_active_store', JSON.stringify(me.data)); } catch {}
+      stores = stores.map(s => String(s.id) === String(me.data.id) ? { ...s, ...me.data } : s);
+    }
+  } else if (status === 'expired') {
+    // El refresh ya no sirve: no dejar el panel como "logueado" en falso
+    try { localStorage.removeItem('ga_active_store'); } catch {}
+  }
+  // Si fue error de red/cold start, conservamos la sesión guardada y reintentamos luego
+  paintSession();
+  return status === 'ok';
+}
+
 async function apiAuth(path, method, body, retried) {
   try {
     const result = await api(path, { method, headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body) });
@@ -591,6 +633,7 @@ async function login(e) {
     AT = j.accessToken;
     storeId = j.store.id; 
     localStorage.setItem('ga_store', storeId);
+    try { localStorage.setItem('ga_active_store', JSON.stringify(j.store)); } catch {}
     toast(`¡Bienvenido, ${j.store.nombre}! ✅`);
     closeModal('loginModal'); 
     form.reset();
@@ -1138,143 +1181,179 @@ function copyWa() { navigator.clipboard?.writeText(window._lastWa || '').then(()
 /* ---------- ferretería: stock ---------- */
 async function toggleStock(id, val) {
   const newStock = val === true || val === 'true' || val === 1;
-  let savedRemote = false;
-  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
-  if (AT && !isDemo) {
-    try {
-      // 1. Intentar API (apiAuth devuelve {demo:true} si no hay sesión/red)
-      const r = await apiAuth(`/products/${id}/stock`, 'PATCH', { stock: newStock });
-      savedRemote = !r?.demo;
-    } catch (err) {
-      console.debug('API stock toggle falló:', err.message);
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id)) || !UUID_RE.test(String(storeId));
+  if (!isDemo) {
+    const r = await apiAuth(`/products/${id}/stock`, 'PATCH', { stock: newStock });
+    if (r && r.demo) {
+      toast('No se pudo actualizar el stock. Revisá tu sesión e intentá de nuevo.');
+      if (!AT) { paintSession(); openModal('loginModal'); }
+      return;
     }
-  }
-  // 2. Fallback localStorage demo
-  if (!savedRemote) {
+  } else {
+    // Solo los productos locales (modo demo) se actualizan en localStorage
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
     const idx = demoProducts.findIndex(p => String(p.id) === String(id));
     if (idx >= 0) {
       demoProducts[idx].stock = newStock;
-      localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+      try { localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts)); } catch {}
     }
-    const storeIdx = products.findIndex(p => String(p.id) === String(id));
-    if (storeIdx >= 0) products[storeIdx].stock = newStock;
   }
   window._all = null;
   loadProducts();
   toast(newStock ? 'Producto disponible ✅' : 'Producto agotado ❌');
 }
 
+/* ---------- Alta de productos: API real, sin falsos positivos ---------- */
+function showFormError(el, msg) {
+  if (!el) { toast(msg); return; }
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function clearFormError(el) {
+  if (!el) return;
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+// Redimensiona/comprime la foto antes de subirla (evita rechazos por peso).
+// Si el navegador no puede decodificarla, se envía el archivo original.
+async function compressImageFile(file, maxDim = 1200, quality = 0.82) {
+  try {
+    if (!file || !/^image\/(jpeg|png|webp)$/i.test(file.type)) return file;
+    if (file.size <= 350 * 1024) return file;
+    if (typeof createImageBitmap !== 'function') return file;
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    if (scale === 1 && file.size <= 900 * 1024) { try { bmp.close(); } catch {} return file; }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    try { bmp.close(); } catch {}
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch { return file; }
+}
+// POST /api/products con reintento de sesión. Solo devuelve si la API creó el producto.
+async function createProductRequest(fd) {
+  if (!UUID_RE.test(String(storeId))) {
+    const e = new Error('Elegí una ferretería registrada para publicar productos');
+    e.status = 400;
+    throw e;
+  }
+  const send = () => fetch(apiURL('/products'), {
+    method: 'POST', headers: authHeaders(), body: fd, credentials: 'include'
+  });
+  let r = await send();
+  if (r.status === 401 && await tryRefresh()) r = await send();
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const det = Array.isArray(j.details) && j.details.length ? ` (${j.details.join(', ')})` : '';
+    const e = new Error((j.error || `Error ${r.status}`) + det);
+    e.status = r.status;
+    throw e;
+  }
+  return j;
+}
+// Confirma contra la API que el producto realmente quedó guardado en PostgreSQL.
+async function confirmProductPersisted(id) {
+  const r = await api(`/products?store_id=${encodeURIComponent(storeId)}`, { timeout: 30000 });
+  if (!r.ok) return null;
+  const list = Array.isArray(r.data) ? r.data : [];
+  window._all = list;
+  return list.find(p => String(p.id) === String(id)) || null;
+}
+
 async function saveProduct(e) {
   e.preventDefault();
   if (!AT && !localStorage.getItem('ga_active_store')) { closeModal('prodModal'); needAuth(() => openModal('prodModal')); return; }
-  
+
   const form = e.target;
+  const errorEl = $('#prodFormError');
   const fileInput = form.querySelector('[name=foto]');
-  const file = fileInput?.files?.[0];
-  
+  const originalFile = fileInput?.files?.[0] || null;
+
   // Leer datos del formulario
   const nombre = form.querySelector('[name=nombre]').value.trim();
   const precio = parseFloat(form.querySelector('[name=precio]').value);
   const categoria = form.querySelector('[name=categoria]').value;
-  
-  if (!nombre || isNaN(precio) || !categoria) {
-    toast('Complete todos los campos obligatorios');
+
+  if (!nombre || isNaN(precio) || precio <= 0 || !categoria) {
+    showFormError(errorEl, '⚠ Complete nombre, precio y categoría.');
     return;
   }
-  
-  // Convertir imagen a Base64 si existe
-  let fotoBase64 = null;
-  if (file) {
-    if (file.size > 5 * 1024 * 1024) {
-      toast('Imagen > 5MB, elija otra');
-      return;
-    }
-    try {
-      fotoBase64 = await fileToBase64(file);
-    } catch (err) {
-      toast('Error procesando imagen');
-      return;
-    }
+  if (originalFile && originalFile.size > 5 * 1024 * 1024) {
+    showFormError(errorEl, '⚠ La foto supera 5 MB. Elegí una más liviana.');
+    return;
   }
-  
+
   const submitBtn = form.querySelector('button[type=submit]');
   const originalText = submitBtn.innerHTML;
   submitBtn.disabled = true;
   submitBtn.innerHTML = 'Publicando... <span class="animate-spin">⏳</span>';
-  
-  // Preparar objeto producto
-  const productData = {
-    id: Date.now(),
-    store_id: storeId,
-    nombre,
-    precio,
-    categoria,
-    foto_base64: fotoBase64,
-    stock: true,
-    creado: new Date().toISOString()
-  };
-  
+  clearFormError(errorEl);
+
   try {
-    // 1. Intentar API (sólo tiendas reales con sesión no-demo)
-    if (!UUID_RE.test(String(storeId)) || String(AT).startsWith('demo-token')) throw new Error('modo demo local');
+    // Comprimir la foto antes de enviarla (menos peso, menos fallos)
+    let foto = originalFile;
+    if (originalFile) foto = await compressImageFile(originalFile);
+    if (foto && foto.size > 5 * 1024 * 1024) throw new Error('La foto sigue superando 5 MB');
+
     const fd = new FormData(form);
-    fd.append('store_id', storeId);
-    const r = await fetch(apiURL('/products'), { method: 'POST', headers: authHeaders(), body: fd });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
-    
-    // Éxito API
+    fd.set('store_id', storeId);
+    fd.set('nombre', nombre);
+    fd.set('precio', String(precio));
+    fd.set('categoria', categoria);
+    if (foto && foto !== originalFile) fd.set('foto', foto, foto.name);
+
+    const created = await createProductRequest(fd);
+
+    // Confirmar desde PostgreSQL antes de decir que quedó guardado
+    const saved = await confirmProductPersisted(created.id);
+    if (!saved) throw new Error('El servidor respondió, pero el producto no aparece en el catálogo');
+
     toast('Producto publicado ✅');
+    closeModal('prodModal');
+    form.reset();
+    const prev = $('#fotoPrev');
+    if (prev) { prev.classList.add('hidden'); prev.src = ''; }
+    await loadProducts();
   } catch (err) {
-    // 2. Fallback localStorage para modo demo
-    console.warn('API no disponible, guardando localmente:', err.message);
-    
-    let demoProducts = [];
-    try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
-    demoProducts.push(productData);
-    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
-    
-    toast('Producto publicado ✅');
+    console.error('Error creando producto:', err);
+    const sesion = err.status === 401 || /sesi[oó]n|401/i.test(err.message);
+    showFormError(errorEl, sesion
+      ? '⚠ Tu sesión venció. El producto NO se guardó: volvé a iniciar sesión e intentá de nuevo.'
+      : `⚠ No se pudo guardar: ${err.message}. El producto NO se guardó.`);
+    toast('No se pudo guardar el producto ❌');
+    if (sesion) { AT = null; paintSession(); closeModal('prodModal'); openModal('loginModal'); }
+    // Si no fue sesión, el modal queda abierto con los datos para reintentar
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
-    closeModal('prodModal');
-    form.reset();
-    $('#fotoPrev').classList.add('hidden');
-    $('#fotoPrev').src = '';
-    window._all = null;
-    loadProducts();
   }
 }
 
-// Helper: convertir File a Base64
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 async function delProduct(id) {
   if (!confirm('¿Eliminar producto y su foto?')) return;
-  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id));
-  let ok = false;
+  const isDemo = String(AT || '').startsWith('demo-token') || !UUID_RE.test(String(id)) || !UUID_RE.test(String(storeId));
   if (!isDemo) {
-    const r = await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
-    ok = r.ok;
-    if (!r.ok && /sesi|401|Inicia sesión|vencida/i.test(r.error || '')) {
-      AT = null; paintSession(); openModal('loginModal');
+    let r = await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!r.ok && /sesi|401/i.test(r.error || '') && await tryRefresh()) {
+      r = await api(`/products/${id}`, { method: 'DELETE', headers: authHeaders() });
     }
-  }
-  if (!ok) {
-    // Fallback demo local
+    if (!r.ok) {
+      toast('No se pudo eliminar: ' + (r.error || 'error de red'));
+      if (/sesi|401/i.test(r.error || '')) { AT = null; paintSession(); openModal('loginModal'); }
+      return;
+    }
+  } else {
+    // Solo los productos locales (modo demo) se borran de localStorage
     let demoProducts = [];
     try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
     demoProducts = demoProducts.filter(p => String(p.id) !== String(id));
-    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
+    try { localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts)); } catch {}
   }
   window._all = null;
   loadProducts();
@@ -1371,78 +1450,80 @@ async function loadInventory() {
 /* Funciones de inventario */
 async function addInventoryProduct(e) {
   e.preventDefault();
-  if (!AT && !localStorage.getItem('ga_active_store')) { needAuth(() => openModal('invModal')); return; }
-  
+  if (!AT && !localStorage.getItem('ga_active_store')) { closeModal('invModal'); needAuth(() => openModal('invModal')); return; }
+
   const form = e.target;
+  const errorEl = $('#invFormError');
   const fileInput = form.querySelector('[name=foto]');
-  const file = fileInput?.files?.[0];
-  
+  const originalFile = fileInput?.files?.[0] || null;
+
   const codigo = form.querySelector('[name=codigo]').value.trim();
   const nombre = form.querySelector('[name=nombre]').value.trim();
   const precio = parseFloat(form.querySelector('[name=precio]').value);
   const categoria = form.querySelector('[name=categoria]').value;
-  const stock = parseInt(form.querySelector('[name=stock]').value) || 0;
-  const precioOferta = parseFloat(form.querySelector('[name=precioOferta]').value) || null;
-  
-  if (!codigo || !nombre || isNaN(precio) || !categoria) {
-    $('#invFormError').textContent = 'Complete todos los campos obligatorios';
-    $('#invFormError').classList.remove('hidden');
+  const stock = Math.max(0, parseInt(form.querySelector('[name=stock]').value) || 0);
+  const precioOfertaRaw = form.querySelector('[name=precioOferta]').value;
+  const precioOferta = precioOfertaRaw === '' ? null : parseFloat(precioOfertaRaw);
+
+  if (!codigo || !nombre || isNaN(precio) || precio <= 0 || !categoria) {
+    showFormError(errorEl, '⚠ Complete código, nombre, precio y categoría.');
     return;
   }
-  
-  let fotoBase64 = null;
-  if (file) {
-    if (file.size > 5 * 1024 * 1024) { toast('Imagen > 5MB, elija otra'); return; }
-    try { fotoBase64 = await fileToBase64(file); } catch { toast('Error procesando imagen'); return; }
+  if (precioOferta != null && (isNaN(precioOferta) || precioOferta < 0)) {
+    showFormError(errorEl, '⚠ El precio de oferta no es válido.');
+    return;
   }
-  
+  if (originalFile && originalFile.size > 5 * 1024 * 1024) {
+    showFormError(errorEl, '⚠ La foto supera 5 MB. Elegí una más liviana.');
+    return;
+  }
+
   const submitBtn = form.querySelector('button[type=submit]');
   const originalText = submitBtn.innerHTML;
   submitBtn.disabled = true;
   submitBtn.innerHTML = 'Guardando... <span class="animate-spin">⏳</span>';
-  $('#invFormError').classList.add('hidden');
-  
-  const productData = {
-    id: String(Date.now()),
-    store_id: storeId,
-    codigo,
-    nombre,
-    precio,
-    categoria,
-    stock: stock > 0,
-    stock_qty: stock,
-    precio_oferta: precioOferta,
-    precioOferta,
-    foto_base64: fotoBase64,
-    creado: new Date().toISOString()
-  };
-  
+  clearFormError(errorEl);
+
   try {
-    // 1. Intentar API (sólo tiendas reales con sesión no-demo)
-    if (!UUID_RE.test(String(storeId)) || String(AT).startsWith('demo-token')) throw new Error('modo demo local');
+    let foto = originalFile;
+    if (originalFile) foto = await compressImageFile(originalFile);
+    if (foto && foto.size > 5 * 1024 * 1024) throw new Error('La foto sigue superando 5 MB');
+
     const fd = new FormData(form);
-    fd.append('store_id', storeId);
-    const r = await fetch(apiURL('/products'), { method: 'POST', headers: authHeaders(), body: fd });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+    fd.set('store_id', storeId);
+    fd.set('codigo', codigo);
+    fd.set('nombre', nombre);
+    fd.set('precio', String(precio));
+    fd.set('categoria', categoria);
+    fd.set('stock_qty', String(stock));
+    fd.set('precio_oferta', precioOferta == null ? '' : String(precioOferta));
+    if (foto && foto !== originalFile) fd.set('foto', foto, foto.name);
+
+    const created = await createProductRequest(fd);
+
+    // Confirmar desde PostgreSQL antes de decir que quedó guardado
+    const saved = await confirmProductPersisted(created.id);
+    if (!saved) throw new Error('El servidor respondió, pero el producto no aparece en el catálogo');
+
     toast('Producto agregado ✅');
+    closeModal('invModal');
+    form.reset();
+    const prev = $('#invFotoPrev');
+    if (prev) { prev.classList.add('hidden'); prev.src = ''; }
+    await loadProducts();
+    loadInventory();
   } catch (err) {
-    console.warn('API no disponible, guardando localmente:', err.message);
-    let demoProducts = [];
-    try { demoProducts = JSON.parse(localStorage.getItem('ga_demo_products') || '[]'); } catch {}
-    demoProducts.push(productData);
-    localStorage.setItem('ga_demo_products', JSON.stringify(demoProducts));
-    toast('Producto agregado ✅');
-} finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
-      form.reset();
-      $('#invFotoPrev').classList.add('hidden');
-      $('#invFotoPrev').src = '';
-      closeModal('invModal');
-      loadInventory();
-      loadProducts();
-    }
+    console.error('Error creando producto de inventario:', err);
+    const sesion = err.status === 401 || /sesi[oó]n|401/i.test(err.message);
+    showFormError(errorEl, sesion
+      ? '⚠ Tu sesión venció. El producto NO se guardó: volvé a iniciar sesión e intentá de nuevo.'
+      : `⚠ No se pudo guardar: ${err.message}. El producto NO se guardó.`);
+    toast('No se pudo guardar el producto ❌');
+    if (sesion) { AT = null; paintSession(); closeModal('invModal'); openModal('loginModal'); }
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
 }
   
 // Traduce los campos del inventario a lo que acepta la API

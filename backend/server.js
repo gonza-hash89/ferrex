@@ -88,7 +88,9 @@ app.use(cors({
 }));
 
 app.use(cookieParser());
-app.use(express.json({ limit: '256kb' }));
+// 10 MB: permite fotos en Base64 cuando el cliente no usa multipart
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting
 const apiLimiter = rateLimit({ windowMs: 60_000, max: 100, standardHeaders: true, legacyHeaders: false, message: { ok: false, error: 'Demasiadas peticiones, espera un minuto' } });
@@ -463,6 +465,10 @@ app.post('/api/products', requireStoreAuth, uploadLimiter, upload.single('foto')
       const base64 = fs.readFileSync(req.file.path, 'base64');
       fotoBase64 = `data:${req.file.mimetype};base64,${base64}`;
       fs.unlinkSync(req.file.path);
+    } else if (typeof req.body.foto_base64 === 'string' && /^data:image\/(jpeg|png|webp);base64,/i.test(req.body.foto_base64)) {
+      // Soporte para clientes que envían la foto embebida en JSON
+      if (req.body.foto_base64.length > 8 * 1024 * 1024) return sendError(res, 413, 'Imagen demasiado grande (máx ~6MB)');
+      fotoBase64 = req.body.foto_base64;
     }
     
     const producto = await dbServices.createProducto({
